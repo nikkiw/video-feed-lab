@@ -5,6 +5,8 @@ agp = "9.2.1"
 java = "17"
 detekt = "1.23.8"
 spotless = "6.25.0"
+media3 = "1.10.1"
+activityCompose = "1.12.4"
 
 [libraries]
 # Gradle plugins as libraries for build-logic dependencies
@@ -20,9 +22,13 @@ compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", v
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose" }
 compose-ui-tooling = { module = "org.jetbrains.compose.ui:ui-tooling", version.ref = "compose" }
 compose-ui-tooling-preview = { module = "org.jetbrains.compose.ui:ui-tooling-preview", version.ref = "compose" }
+compose-material = { module = "org.jetbrains.compose.material:material", version.ref = "compose" }
 
-# AndroidX dependencies
-androidx-activity-compose = { module = "androidx.activity:activity-compose", version = "1.10.0" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
+androidx-media3-exoplayer-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "media3" }
+androidx-media3-exoplayer-dash = { module = "androidx.media3:media3-exoplayer-dash", version.ref = "media3" }
+androidx-media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

@@ -6,20 +6,20 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 
     // Convention plugins for static analysis and formatting
-    id("com.example.detekt-convention")
-    id("com.example.spotless-convention")
+    id("com.nikkiw.videofeedlab.detekt-convention")
+    id("com.nikkiw.videofeedlab.spotless-convention")
 }
 
 android {
-    namespace = "com.example.androidApp"
+    namespace = "com.nikkiw.videofeedlab.android"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.example.androidApp"
+        applicationId = "com.nikkiw.videofeedlab"
         minSdk = 23
         targetSdk = 37
         versionCode = 1
-        versionName = "1.0"
+        versionName = "0.1.0"
     }
 
     buildFeatures {
@@ -38,15 +38,12 @@ android {
 }
 
 dependencies {
-    implementation(project(":shared"))
-    implementation(project(":feature:home:api"))
-    implementation(project(":feature:home:impl"))
-
+    implementation(project(":feature:video-feed:api"))
+    implementation(project(":feature:video-feed:impl"))
     implementation(libs.androidx.activity.compose)
-
     implementation(libs.compose.foundation)
     implementation(libs.compose.ui)
+    implementation(libs.compose.material)
     implementation(libs.compose.ui.tooling.preview)
-
     debugImplementation(libs.compose.ui.tooling)
 }

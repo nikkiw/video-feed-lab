@@ -16,7 +16,7 @@ buildscript {
 plugins {
     alias(libs.plugins.kotlin.compose.compiler) apply false
     alias(libs.plugins.android.kotlin.multiplatform.library) apply false
-    id("com.example.spotless-convention")
+    id("com.nikkiw.videofeedlab.spotless-convention")
 }
 
 allprojects {

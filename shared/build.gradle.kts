@@ -10,13 +10,13 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 
     // Convention plugins for static analysis and formatting
-    id("com.example.detekt-convention")
-    id("com.example.spotless-convention")
+    id("com.nikkiw.videofeedlab.detekt-convention")
+    id("com.nikkiw.videofeedlab.spotless-convention")
 }
 
 kotlin {
     android {
-        namespace = "com.example.shared"
+        namespace = "com.nikkiw.videofeedlab.shared"
         compileSdk = 37
         minSdk = 23
         withHostTest {}
