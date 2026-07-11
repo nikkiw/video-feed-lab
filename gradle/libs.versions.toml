@@ -7,6 +7,8 @@ detekt = "1.23.8"
 spotless = "6.25.0"
 media3 = "1.10.1"
 activityCompose = "1.12.4"
+decompose = "3.2.0"
+mvikotlin = "4.2.0"
 
 [libraries]
 # Gradle plugins as libraries for build-logic dependencies
@@ -15,6 +17,15 @@ compose-gradlePlugin = { module = "org.jetbrains.compose:compose-gradle-plugin",
 android-gradlePlugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
 detekt-gradlePlugin = { module = "io.gitlab.arturbosch.detekt:detekt-gradle-plugin", version.ref = "detekt" }
 spotless-gradlePlugin = { module = "com.diffplug.spotless:spotless-plugin-gradle", version.ref = "spotless" }
+
+# Decompose
+decompose = { module = "com.arkivanov.decompose:decompose", version.ref = "decompose" }
+decompose-compose = { module = "com.arkivanov.decompose:extensions-compose", version.ref = "decompose" }
+
+# MVIKotlin
+mvikotlin = { module = "com.arkivanov.mvikotlin:mvikotlin", version.ref = "mvikotlin" }
+mvikotlin-main = { module = "com.arkivanov.mvikotlin:mvikotlin-main", version.ref = "mvikotlin" }
+mvikotlin-coroutines = { module = "com.arkivanov.mvikotlin:mvikotlin-extensions-coroutines", version.ref = "mvikotlin" }
 
 # Compose Multiplatform UI components
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose" }

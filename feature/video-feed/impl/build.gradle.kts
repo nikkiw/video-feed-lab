@@ -9,6 +9,12 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)
             implementation(libs.compose.material)
+
+            implementation(libs.decompose)
+            implementation(libs.decompose.compose)
+            implementation(libs.mvikotlin)
+            implementation(libs.mvikotlin.main)
+            implementation(libs.mvikotlin.coroutines)
         }
 
         androidMain.dependencies {

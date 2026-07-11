@@ -40,6 +40,7 @@ android {
 dependencies {
     implementation(project(":feature:video-feed:api"))
     implementation(project(":feature:video-feed:impl"))
+    implementation(libs.decompose)
     implementation(libs.androidx.activity.compose)
     implementation(libs.compose.foundation)
     implementation(libs.compose.ui)

@@ -40,6 +40,9 @@ internal class AndroidPlaybackCoordinator(
     private var rebufferCount = 0
     private var debugState = PlaybackDebugState()
 
+    // Homing positions map for scrolling back and resuming
+    private val savedPositions = mutableMapOf<String, Long>()
+
     private val playerListener =
         object : Player.Listener {
             override fun onRenderedFirstFrame() {
@@ -77,6 +80,12 @@ internal class AndroidPlaybackCoordinator(
     fun play(index: Int) {
         if (index !in mediaItems.indices || index == currentIndex) return
 
+        // Save position of current video before switching
+        if (currentIndex in mediaItems.indices) {
+            val oldItem = items[currentIndex]
+            savedPositions[oldItem.id] = player.currentPosition
+        }
+
         currentIndex = index
         firstFrameRendered = false
         rebufferCount = 0
@@ -94,9 +103,16 @@ internal class AndroidPlaybackCoordinator(
             player.setMediaItem(mediaItem)
         }
 
+        // Seek to saved position if it exists, otherwise seek to 0
+        val savedPos = savedPositions[items[index].id]
+        if (savedPos != null) {
+            player.seekTo(savedPos)
+        } else {
+            player.seekTo(0)
+        }
+
         player.prepare()
         player.playWhenReady = true
-
         preloadStatusControl.currentPlayingIndex = index
         preloadManager.setCurrentPlayingIndex(index)
         preloadManager.invalidate()
@@ -111,6 +127,9 @@ internal class AndroidPlaybackCoordinator(
     }
 
     fun release() {
+        if (currentIndex in mediaItems.indices) {
+            savedPositions[items[currentIndex].id] = player.currentPosition
+        }
         player.removeListener(playerListener)
         player.release()
         preloadManager.release()
@@ -159,7 +178,6 @@ internal class AndroidPlaybackCoordinator(
                 StreamType.DASH -> MimeTypes.APPLICATION_MPD
                 StreamType.PROGRESSIVE -> MimeTypes.VIDEO_MP4
             }
-
         return MediaItem.Builder()
             .setMediaId(item.id)
             .setUri(item.source.uri)
