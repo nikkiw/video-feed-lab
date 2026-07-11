@@ -4,6 +4,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -108,7 +110,9 @@ private fun VideoFeedItemView(
                 .fillMaxSize()
                 .pointerInput(active) {
                     detectTapGestures(onTap = { onTogglePlay() })
-                },
+                }
+                .focusProperties { canFocus = false }
+                .focusable(false),
     ) {
         AndroidView(
             factory = { viewContext ->
@@ -120,13 +124,20 @@ private fun VideoFeedItemView(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT,
                         )
+                    isFocusable = false
+                    isFocusableInTouchMode = false
+                    descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 }
             },
             update = { playerView ->
                 val targetPlayer = if (active) coordinator.player else null
                 playerView.player = targetPlayer
             },
-            modifier = Modifier.fillMaxSize(),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .focusProperties { canFocus = false }
+                    .focusable(false),
         )
 
         if (active && !isFirstFrameRendered) {
