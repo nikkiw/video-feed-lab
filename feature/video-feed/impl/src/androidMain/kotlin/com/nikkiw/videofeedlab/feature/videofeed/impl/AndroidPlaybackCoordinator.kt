@@ -2,6 +2,9 @@ package com.nikkiw.videofeedlab.feature.videofeed.impl
 
 import android.content.Context
 import android.os.SystemClock
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
@@ -18,6 +21,9 @@ internal class AndroidPlaybackCoordinator(
     private val items: List<VideoItem>,
     private val onDebugState: (PlaybackDebugState) -> Unit,
 ) {
+    var isFirstFrameRendered by mutableStateOf(false)
+        private set
+
     private val preloadStatusControl = FeedTargetPreloadStatusControl()
     private val preloadManagerBuilder =
         DefaultPreloadManager.Builder(
@@ -48,6 +54,7 @@ internal class AndroidPlaybackCoordinator(
             override fun onRenderedFirstFrame() {
                 if (firstFrameRendered) return
                 firstFrameRendered = true
+                isFirstFrameRendered = true
                 val requestedAt = playbackRequestedAtMs ?: return
                 debugState =
                     debugState.copy(
@@ -88,6 +95,7 @@ internal class AndroidPlaybackCoordinator(
 
         currentIndex = index
         firstFrameRendered = false
+        isFirstFrameRendered = false
         rebufferCount = 0
         playbackRequestedAtMs = SystemClock.elapsedRealtime()
         debugState = PlaybackDebugState(videoId = items[index].id)

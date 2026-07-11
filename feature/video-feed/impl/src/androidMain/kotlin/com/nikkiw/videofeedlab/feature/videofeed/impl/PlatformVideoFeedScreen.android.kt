@@ -75,6 +75,7 @@ internal actual fun PlatformVideoFeedScreen(component: VideoFeedComponent) {
             VideoFeedItemView(
                 item = model.items[page],
                 active = page == pagerState.settledPage,
+                isFirstFrameRendered = coordinator.isFirstFrameRendered,
                 coordinator = coordinator,
                 onTogglePlay = { component.onTogglePlay() },
             )
@@ -96,6 +97,7 @@ internal actual fun PlatformVideoFeedScreen(component: VideoFeedComponent) {
 private fun VideoFeedItemView(
     item: VideoItem,
     active: Boolean,
+    isFirstFrameRendered: Boolean,
     coordinator: AndroidPlaybackCoordinator,
     onTogglePlay: () -> Unit,
     modifier: Modifier = Modifier,
@@ -126,6 +128,15 @@ private fun VideoFeedItemView(
             },
             modifier = Modifier.fillMaxSize(),
         )
+
+        if (active && !isFirstFrameRendered) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black),
+            )
+        }
 
         Column(
             modifier =
