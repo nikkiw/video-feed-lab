@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- This manifest is required for the shared Android library.  It
+         declares no activities because the entry point is provided by
+         androidApp. -->
+    <application />
+</manifest>

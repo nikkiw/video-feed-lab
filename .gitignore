@@ -1,0 +1,23 @@
+# Gradle and Kotlin
+.gradle/
+.kotlin/
+build/
+**/build/
+
+# Local IDE state
+.idea/
+*.iml
+
+# Android local SDK config
+local.properties
+
+# Generated JS/Wasm package manager state
+kotlin-js-store/
+
+# Runtime crash dumps and local logs
+*.hprof
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

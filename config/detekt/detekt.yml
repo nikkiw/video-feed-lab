@@ -1,0 +1,42 @@
+# Detekt configuration overrides for Kotlin Multiplatform
+# Default rules are loaded via 'buildUponDefaultConfig = true' in Gradle.
+# For details on rules, visit https://detekt.dev/
+
+complexity:
+  TooManyFunctions:
+    active: false
+  LongParameterList:
+    active: true
+    functionThreshold: 8 # KMP/Compose functions often have more parameters
+    constructorThreshold: 8
+  LongMethod:
+    active: true
+    threshold: 80
+  LargeClass:
+    active: true
+    threshold: 250
+
+naming:
+  FunctionNaming:
+    active: true
+    # Allow uppercase starting letters for Compose @Composable functions
+    functionPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    excludeClassPattern: '.*Test$'
+  ConstructorParameterNaming:
+    active: true
+    parameterPattern: '[a-z][a-zA-Z0-9]*'
+
+style:
+  MagicNumber:
+    active: false # Disabled as magic numbers are frequent in UI and animations
+  WildcardImport:
+    active: false # Formatting is handled by Spotless/KtLint anyway
+  UnusedPrivateMember:
+    active: true
+    allowedNames: '(_|ignored|expected)'
+  FunctionOnlyReturningConstant:
+    active: false
+
+performance:
+  SpreadOperator:
+    active: false # Spread operator is sometimes unavoidable in KMP
