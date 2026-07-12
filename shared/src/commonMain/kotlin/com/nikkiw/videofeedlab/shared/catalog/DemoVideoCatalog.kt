@@ -20,6 +20,9 @@ object DemoVideoCatalog {
                         uri = "https://stream.mux.com/yb2L3z3Z4IKQH02HYkf9xPToVYkOC85WA.m3u8",
                         streamType = StreamType.HLS,
                     ),
+                thumbnailUrl = "https://image.mux.com/yb2L3z3Z4IKQH02HYkf9xPToVYkOC85WA/thumbnail.jpg?time=7",
+                timeBasedThumbnailUrlTemplate =
+                    "https://image.mux.com/yb2L3z3Z4IKQH02HYkf9xPToVYkOC85WA/thumbnail.jpg?time={timeSeconds}",
             ),
             VideoItem(
                 id = "shaka-live-hls",
@@ -30,6 +33,7 @@ object DemoVideoCatalog {
                         uri = "https://storage.googleapis.com/shaka-live-assets/player-source.m3u8",
                         streamType = StreamType.HLS,
                     ),
+                thumbnailUrl = "https://picsum.photos/id/15/1080/1920",
             ),
             VideoItem(
                 id = "tears-of-steel-dash",
@@ -40,6 +44,7 @@ object DemoVideoCatalog {
                         uri = "https://storage.googleapis.com/shaka-demo-assets/tos-ttml/dash.mpd",
                         streamType = StreamType.DASH,
                     ),
+                thumbnailUrl = "https://picsum.photos/id/10/1080/1920",
             ),
             VideoItem(
                 id = "big-buck-bunny-dash",
@@ -50,6 +55,7 @@ object DemoVideoCatalog {
                         uri = "https://dash.akamaized.net/dash264/TestCases/1c/qualcomm/2/MultiRate.mpd",
                         streamType = StreamType.DASH,
                     ),
+                thumbnailUrl = "https://picsum.photos/id/12/1080/1920",
             ),
         )
 }
