@@ -7,26 +7,26 @@ import com.nikkiw.videofeedlab.shared.model.VideoItem
 
 object DemoVideoCatalog {
     val assetIds = listOf(
-        "bolt-detection",
-        "bolt-multi-size-detection",
-        "bottle-detection",
-        "car-detection",
-        "classroom",
-        "driver-action-recognition",
-        "face-demographics-walking-and-pause",
-        "face-demographics-walking",
-        "fruit-and-vegetable-detection",
-        "head-pose-face-detection-female-and-male",
-        "head-pose-face-detection-female",
-        "head-pose-face-detection-male",
-        "one-by-one-person-detection",
-        "people-detection",
-        "person-bicycle-car-detection",
-        "store-aisle-detection",
-        "worker-zone-detection",
-        "big-buck-bunny",
-        "echo-hereweare",
-        "big-buck-bunny-1080p-30sec"
+        "dance-neon",
+        "girl-portrait",
+        "woman-smile",
+        "man-running",
+        "people-active",
+        "couple-laugh",
+        "woman-dancing",
+        "urban-lights",
+        "skater-jump",
+        "city-street",
+        "surf-ocean",
+        "active-sports",
+        "neon-signs",
+        "nature-waterfall",
+        "urban-runner",
+        "scenery-mountains",
+        "dj-turntable",
+        "cyberpunk-city",
+        "street-dance",
+        "aesthetic-sunset"
     )
 
     val items: List<VideoItem> = create()
