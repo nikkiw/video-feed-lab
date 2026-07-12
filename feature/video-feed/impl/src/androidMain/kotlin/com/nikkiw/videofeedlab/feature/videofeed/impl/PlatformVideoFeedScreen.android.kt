@@ -71,6 +71,20 @@ internal actual fun PlatformVideoFeedScreen(component: VideoFeedComponent) {
         coordinator.play(pagerState.settledPage)
     }
 
+    LaunchedEffect(pagerState.currentPage, pagerState.currentPageOffsetFraction, coordinator) {
+        val offset = pagerState.currentPageOffsetFraction
+        val current = pagerState.currentPage
+        val targetPage =
+            when {
+                offset > 0.05f -> current + 1
+                offset < -0.05f -> current - 1
+                else -> null
+            }
+        if (targetPage != null && targetPage in 0 until model.items.size) {
+            coordinator.preloadPage(targetPage)
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         VerticalPager(
             state = pagerState,

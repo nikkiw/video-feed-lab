@@ -153,6 +153,34 @@ internal class AndroidPlaybackCoordinator(
         }
     }
 
+    fun preloadPage(index: Int) {
+        if (isLowRamDevice || index == currentIndex || index !in items.indices) return
+        if (pageToPlayerMap[index] == preloadPlayer) return // Already preloading this index
+
+        // Unbind preloadPlayer from any other page
+        pageToPlayerMap.entries.firstOrNull { it.value == preloadPlayer }?.let {
+            pageToPlayerMap.remove(it.key)
+        }
+
+        preloadPlayer?.apply {
+            stop()
+            val mediaItem = mediaItems[index]
+            val preloadedSource = preloadManager.getMediaSource(mediaItem)
+            if (preloadedSource != null) {
+                setMediaSource(preloadedSource)
+            } else {
+                setMediaItem(mediaItem)
+            }
+            seekTo(savedPositions[items[index].id] ?: 0)
+            prepare()
+            volume = 0f
+            playWhenReady = false
+
+            firstFrameRenderedMap[index] = false
+            pageToPlayerMap[index] = this
+        }
+    }
+
     private fun playSinglePlayer(index: Int) {
         if (currentIndex in items.indices) {
             savedPositions[items[currentIndex].id] = activePlayer.currentPosition
@@ -200,6 +228,7 @@ internal class AndroidPlaybackCoordinator(
         pageToPlayerMap.clear()
 
         // Active Player setup
+        firstFrameRenderedMap[index] = false
         pageToPlayerMap[index] = activePlayer
         activePlayer.stop()
         val mediaItem = mediaItems[index]
@@ -219,7 +248,7 @@ internal class AndroidPlaybackCoordinator(
         debugState = PlaybackDebugState(videoId = items[index].id)
         emitDebugState()
 
-        // Preload Player setup
+        // Preload Player setup (default forward preloading on landing)
         val nextIndex = index + 1
         if (nextIndex in items.indices && preloadPlayer != null) {
             pageToPlayerMap[nextIndex] = preloadPlayer
