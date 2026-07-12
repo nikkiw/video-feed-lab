@@ -28,6 +28,9 @@ kotlin {
             dependencies {
                 implementation(libs.compose.runtime)
                 implementation(libs.compose.ui)
+                implementation(libs.decompose)
+                implementation(libs.mvikotlin)
+                implementation(libs.mvikotlin.main)
             }
         }
         val commonTest by getting {

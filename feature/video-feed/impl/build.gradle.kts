@@ -15,6 +15,7 @@ kotlin {
             implementation(libs.mvikotlin)
             implementation(libs.mvikotlin.main)
             implementation(libs.mvikotlin.coroutines)
+            implementation(libs.kotlinx.coroutines.core)
         }
 
         androidMain.dependencies {
@@ -22,6 +23,7 @@ kotlin {
             implementation(libs.androidx.media3.exoplayer.hls)
             implementation(libs.androidx.media3.exoplayer.dash)
             implementation(libs.androidx.media3.ui)
+            implementation(libs.coil.compose)
         }
 
         desktopMain.dependencies {
