@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -28,6 +30,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
@@ -76,9 +79,9 @@ internal actual fun PlatformVideoFeedScreen(component: VideoFeedComponent) {
         ) { page ->
             VideoFeedItemView(
                 item = model.items[page],
+                player = coordinator.getPlayerForIndex(page),
+                isFirstFrameRendered = coordinator.isFirstFrameRenderedForIndex(page),
                 active = page == pagerState.settledPage,
-                isFirstFrameRendered = coordinator.isFirstFrameRendered,
-                coordinator = coordinator,
                 onTogglePlay = { component.onTogglePlay() },
             )
         }
@@ -98,9 +101,9 @@ internal actual fun PlatformVideoFeedScreen(component: VideoFeedComponent) {
 @Composable
 private fun VideoFeedItemView(
     item: VideoItem,
-    active: Boolean,
+    player: ExoPlayer?,
     isFirstFrameRendered: Boolean,
-    coordinator: AndroidPlaybackCoordinator,
+    active: Boolean,
     onTogglePlay: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -130,8 +133,7 @@ private fun VideoFeedItemView(
                 }
             },
             update = { playerView ->
-                val targetPlayer = if (active) coordinator.player else null
-                playerView.player = targetPlayer
+                playerView.player = player
             },
             modifier =
                 Modifier
@@ -173,17 +175,26 @@ private fun DebugOverlay(
     Column(
         modifier =
             modifier
-                .background(Color.Black.copy(alpha = 0.65f))
-                .padding(10.dp),
+                .background(Color.Black.copy(alpha = 0.75f))
+                .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
+        Text(text = "SYSTEM & PLAYER", color = Color.Yellow)
+        Text(text = "low-ram: ${AnalyticsManager.isLowRamDevice}", color = Color.White)
         Text(text = "id: ${state.videoId ?: "-"}", color = Color.White)
-        Text(text = "startup: ${state.startupTimeMs?.let { "$it ms" } ?: "..."}", color = Color.White)
-        Text(text = "rebuffer: ${state.rebufferCount}", color = Color.White)
         Text(text = "bitrate: ${state.bitrateKbps?.let { "$it kbps" } ?: "-"}", color = Color.White)
         Text(text = "resolution: ${state.resolution ?: "-"}", color = Color.White)
         Text(text = "playing: ${state.isPlaying}", color = Color.White)
-        Row(modifier = Modifier.padding(top = 6.dp).clickable(onClick = onToggleMuted)) {
+
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(text = "ENTERPRISE ANALYTICS", color = Color.Green)
+        Text(text = "starts: ${AnalyticsManager.videoStarts}", color = Color.White)
+        Text(text = "median (p50): ${AnalyticsManager.p50StartupTime} ms", color = Color.White)
+        Text(text = "cold (p95): ${AnalyticsManager.p95StartupTime} ms", color = Color.White)
+        Text(text = "rebuffers: ${AnalyticsManager.totalRebuffers}", color = Color.White)
+        Text(text = "errors: ${AnalyticsManager.totalErrors}", color = Color.White)
+
+        Row(modifier = Modifier.padding(top = 8.dp).clickable(onClick = onToggleMuted)) {
             Text(text = if (muted) "UNMUTE" else "MUTE", color = Color.Cyan)
         }
     }

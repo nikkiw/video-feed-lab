@@ -1,177 +1,282 @@
 package com.nikkiw.videofeedlab.feature.videofeed.impl
 
+import android.app.ActivityManager
 import android.content.Context
 import android.os.SystemClock
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.annotation.OptIn
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.preload.DefaultPreloadManager
 import com.nikkiw.videofeedlab.feature.videofeed.api.PlaybackDebugState
+import com.nikkiw.videofeedlab.feature.videofeed.impl.cache.CacheManager
 import com.nikkiw.videofeedlab.shared.model.StreamType
 import com.nikkiw.videofeedlab.shared.model.VideoItem
 import kotlin.math.max
 import kotlin.math.min
 
+@OptIn(UnstableApi::class)
 internal class AndroidPlaybackCoordinator(
     context: Context,
     private val items: List<VideoItem>,
     private val onDebugState: (PlaybackDebugState) -> Unit,
 ) {
-    var isFirstFrameRendered by mutableStateOf(false)
-        private set
+    val isLowRamDevice: Boolean
+    private val cacheDataSourceFactory = CacheManager.getCacheDataSourceFactory(context)
 
-    private val preloadStatusControl = FeedTargetPreloadStatusControl()
-    private val preloadManagerBuilder =
-        DefaultPreloadManager.Builder(
-            context.applicationContext,
-            preloadStatusControl,
-        )
-    private val preloadManager: DefaultPreloadManager = preloadManagerBuilder.build()
+    // Players pool
+    private val activePlayer: ExoPlayer
+    private val preloadPlayer: ExoPlayer? // null on Low-RAM devices
 
-    val player: ExoPlayer =
-        preloadManagerBuilder.buildExoPlayer().apply {
-            repeatMode = Player.REPEAT_MODE_ONE
-        }
+    // State mapping
+    private val pageToPlayerMap = mutableStateMapOf<Int, ExoPlayer>()
+    private val firstFrameRenderedMap = mutableStateMapOf<Int, Boolean>()
+
+    private val preloadStatusControl: FeedTargetPreloadStatusControl
+    private val preloadManager: DefaultPreloadManager
 
     private val mediaItems: List<MediaItem> = items.map(::toMediaItem)
-    private val addedToPreloadManager = mutableSetOf<Int>()
-
     private var currentIndex: Int = -1
     private var playbackRequestedAtMs: Long? = null
-    private var firstFrameRendered = false
     private var rebufferCount = 0
     private var debugState = PlaybackDebugState()
+    private var isMuted = false
 
-    // Homing positions map for scrolling back and resuming
     private val savedPositions = mutableMapOf<String, Long>()
 
-    private val playerListener =
-        object : Player.Listener {
-            override fun onRenderedFirstFrame() {
-                if (firstFrameRendered) return
-                firstFrameRendered = true
-                isFirstFrameRendered = true
-                val requestedAt = playbackRequestedAtMs ?: return
-                debugState =
-                    debugState.copy(
-                        startupTimeMs = SystemClock.elapsedRealtime() - requestedAt,
-                    )
-                updateFormat()
-                emitDebugState()
+    init {
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        isLowRamDevice = activityManager.isLowRamDevice
+        AnalyticsManager.isLowRamDevice = isLowRamDevice
+
+        preloadStatusControl = FeedTargetPreloadStatusControl(isLowRamDevice)
+
+        val preloadManagerBuilder =
+            DefaultPreloadManager.Builder(context.applicationContext, preloadStatusControl)
+                .setMediaSourceFactory(DefaultMediaSourceFactory(cacheDataSourceFactory))
+
+        preloadManager = preloadManagerBuilder.build()
+
+        activePlayer =
+            preloadManagerBuilder.buildExoPlayer().apply {
+                repeatMode = Player.REPEAT_MODE_ONE
             }
 
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_BUFFERING && firstFrameRendered) {
-                    rebufferCount += 1
-                    debugState = debugState.copy(rebufferCount = rebufferCount)
+        preloadPlayer =
+            if (!isLowRamDevice) {
+                preloadManagerBuilder.buildExoPlayer().apply {
+                    repeatMode = Player.REPEAT_MODE_ONE
+                    volume = 0f
+                }
+            } else {
+                null
+            }
+
+        setupListeners()
+        play(0)
+    }
+
+    private fun setupListeners() {
+        val listener =
+            object : Player.Listener {
+                override fun onRenderedFirstFrame() {
+                    val player = playerPool().firstOrNull { it.volume > 0f || it.playWhenReady } ?: activePlayer
+                    val index = pageToPlayerMap.entries.firstOrNull { it.value == player }?.key ?: return
+                    firstFrameRenderedMap[index] = true
+
+                    if (index == currentIndex) {
+                        val requestedAt = playbackRequestedAtMs ?: return
+                        val latency = SystemClock.elapsedRealtime() - requestedAt
+                        AnalyticsManager.trackStartupTime(items[index].id, latency)
+
+                        debugState = debugState.copy(startupTimeMs = latency)
+                        updateFormat(player)
+                        emitDebugState()
+                    }
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    val player = playerPool().firstOrNull { it.playWhenReady } ?: activePlayer
+                    val index = pageToPlayerMap.entries.firstOrNull { it.value == player }?.key ?: return
+                    if (index == currentIndex) {
+                        if (playbackState == Player.STATE_BUFFERING) {
+                            rebufferCount += 1
+                            AnalyticsManager.trackRebuffer(items[index].id)
+                            debugState = debugState.copy(rebufferCount = rebufferCount)
+                            emitDebugState()
+                        }
+                    }
+                }
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    if (isPlaying) {
+                        val index = pageToPlayerMap.entries.firstOrNull { it.value == activePlayer }?.key ?: return
+                        AnalyticsManager.trackVideoStart(items[index].id)
+                    }
+                    debugState = debugState.copy(isPlaying = isPlaying)
                     emitDebugState()
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    val player = playerPool().firstOrNull { it == activePlayer } ?: activePlayer
+                    val index = pageToPlayerMap.entries.firstOrNull { it.value == player }?.key ?: return
+                    AnalyticsManager.trackError(items[index].id, error.message ?: "Unknown ExoPlayer Error")
                 }
             }
 
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                debugState = debugState.copy(isPlaying = isPlaying)
-                updateFormat()
-                emitDebugState()
-            }
-        }
-
-    init {
-        player.addListener(playerListener)
-        syncPreloadWindow(centerIndex = 0)
+        activePlayer.addListener(listener)
+        preloadPlayer?.addListener(listener)
     }
 
-    fun play(index: Int) {
-        if (index !in mediaItems.indices || index == currentIndex) return
+    private fun playerPool() = listOfNotNull(activePlayer, preloadPlayer)
 
-        // Save position of current video before switching
-        if (currentIndex in mediaItems.indices) {
-            val oldItem = items[currentIndex]
-            savedPositions[oldItem.id] = player.currentPosition
+    fun getPlayerForIndex(index: Int): ExoPlayer? = pageToPlayerMap[index]
+
+    fun isFirstFrameRenderedForIndex(index: Int): Boolean = firstFrameRenderedMap[index] ?: false
+
+    fun play(index: Int) {
+        if (index !in items.indices) return
+
+        if (currentIndex != -1 && currentIndex != index) {
+            println("[EnterpriseAnalytics] 📊 Event: PAGE_SCROLL | From: $currentIndex | To: $index")
+        }
+
+        if (isLowRamDevice) {
+            playSinglePlayer(index)
+        } else {
+            playMultiPlayer(index)
+        }
+    }
+
+    private fun playSinglePlayer(index: Int) {
+        if (currentIndex in items.indices) {
+            savedPositions[items[currentIndex].id] = activePlayer.currentPosition
         }
 
         currentIndex = index
-        firstFrameRendered = false
-        isFirstFrameRendered = false
-        rebufferCount = 0
-        playbackRequestedAtMs = SystemClock.elapsedRealtime()
-        debugState = PlaybackDebugState(videoId = items[index].id)
-        emitDebugState()
+        firstFrameRenderedMap[index] = false
+        pageToPlayerMap.clear()
+        pageToPlayerMap[index] = activePlayer
 
-        syncPreloadWindow(centerIndex = index)
-
+        activePlayer.stop()
         val mediaItem = mediaItems[index]
         val preloadedSource = preloadManager.getMediaSource(mediaItem)
         if (preloadedSource != null) {
-            player.setMediaSource(preloadedSource)
+            activePlayer.setMediaSource(preloadedSource)
         } else {
-            player.setMediaItem(mediaItem)
+            activePlayer.setMediaItem(mediaItem)
         }
 
-        // Seek to saved position if it exists, otherwise seek to 0
         val savedPos = savedPositions[items[index].id]
-        if (savedPos != null) {
-            player.seekTo(savedPos)
-        } else {
-            player.seekTo(0)
+        activePlayer.seekTo(savedPos ?: 0)
+        activePlayer.prepare()
+        activePlayer.volume = if (isMuted) 0f else 1f
+        activePlayer.playWhenReady = true
+
+        playbackRequestedAtMs = SystemClock.elapsedRealtime()
+        rebufferCount = 0
+        debugState = PlaybackDebugState(videoId = items[index].id)
+        emitDebugState()
+
+        syncPreloadWindow(index)
+    }
+
+    private fun playMultiPlayer(index: Int) {
+        val oldActiveIndex = currentIndex
+        currentIndex = index
+
+        if (oldActiveIndex != -1 && oldActiveIndex != index) {
+            pageToPlayerMap[oldActiveIndex]?.let { player ->
+                savedPositions[items[oldActiveIndex].id] = player.currentPosition
+                player.stop()
+            }
         }
 
-        player.prepare()
-        player.playWhenReady = true
-        preloadStatusControl.currentPlayingIndex = index
-        preloadManager.setCurrentPlayingIndex(index)
-        preloadManager.invalidate()
+        pageToPlayerMap.clear()
+
+        // Active Player setup
+        pageToPlayerMap[index] = activePlayer
+        activePlayer.stop()
+        val mediaItem = mediaItems[index]
+        val preloadedSource = preloadManager.getMediaSource(mediaItem)
+        if (preloadedSource != null) {
+            activePlayer.setMediaSource(preloadedSource)
+        } else {
+            activePlayer.setMediaItem(mediaItem)
+        }
+        activePlayer.seekTo(savedPositions[items[index].id] ?: 0)
+        activePlayer.prepare()
+        activePlayer.volume = if (isMuted) 0f else 1f
+        activePlayer.playWhenReady = true
+
+        playbackRequestedAtMs = SystemClock.elapsedRealtime()
+        rebufferCount = 0
+        debugState = PlaybackDebugState(videoId = items[index].id)
+        emitDebugState()
+
+        // Preload Player setup
+        val nextIndex = index + 1
+        if (nextIndex in items.indices && preloadPlayer != null) {
+            pageToPlayerMap[nextIndex] = preloadPlayer
+            preloadPlayer.stop()
+            val nextMediaItem = mediaItems[nextIndex]
+            val nextPreloadedSource = preloadManager.getMediaSource(nextMediaItem)
+            if (nextPreloadedSource != null) {
+                preloadPlayer.setMediaSource(nextPreloadedSource)
+            } else {
+                preloadPlayer.setMediaItem(nextMediaItem)
+            }
+            preloadPlayer.seekTo(savedPositions[items[nextIndex].id] ?: 0)
+            preloadPlayer.prepare()
+            preloadPlayer.volume = 0f
+            preloadPlayer.playWhenReady = false
+            firstFrameRenderedMap[nextIndex] = false
+        }
+
+        syncPreloadWindow(index)
     }
 
     fun togglePlayPause() {
-        if (player.isPlaying) player.pause() else player.play()
+        activePlayer.playWhenReady = !activePlayer.playWhenReady
     }
 
     fun setMuted(muted: Boolean) {
-        player.volume = if (muted) 0f else 1f
+        isMuted = muted
+        activePlayer.volume = if (muted) 0f else 1f
     }
 
     fun release() {
-        if (currentIndex in mediaItems.indices) {
-            savedPositions[items[currentIndex].id] = player.currentPosition
+        if (currentIndex in items.indices) {
+            savedPositions[items[currentIndex].id] = activePlayer.currentPosition
         }
-        player.removeListener(playerListener)
-        player.release()
+        activePlayer.release()
+        preloadPlayer?.release()
+        pageToPlayerMap.clear()
+        firstFrameRenderedMap.clear()
         preloadManager.release()
     }
 
     private fun syncPreloadWindow(centerIndex: Int) {
-        val start = max(0, centerIndex - PRELOAD_WINDOW_RADIUS)
-        val end = min(mediaItems.lastIndex, centerIndex + PRELOAD_WINDOW_RADIUS)
-        val desired = (start..end).toSet()
-
-        (addedToPreloadManager - desired).forEach { index ->
-            preloadManager.remove(mediaItems[index])
-            addedToPreloadManager.remove(index)
+        preloadManager.setCurrentPlayingIndex(centerIndex)
+        val start = max(0, centerIndex - 2)
+        val end = min(mediaItems.lastIndex, centerIndex + 2)
+        for (i in start..end) {
+            preloadManager.add(mediaItems[i], i)
         }
-
-        (desired - addedToPreloadManager).forEach { index ->
-            preloadManager.add(mediaItems[index], index)
-            addedToPreloadManager.add(index)
-        }
-
         preloadManager.invalidate()
     }
 
-    private fun updateFormat() {
+    private fun updateFormat(player: ExoPlayer) {
         val format = player.videoFormat ?: return
         debugState =
             debugState.copy(
                 bitrateKbps = format.bitrate.takeIf { it > 0 }?.div(1_000),
-                resolution =
-                    if (format.width > 0 && format.height > 0) {
-                        "${format.width}×${format.height}"
-                    } else {
-                        null
-                    },
+                resolution = if (format.width > 0 && format.height > 0) "${format.width}×${format.height}" else null,
             )
     }
 
@@ -191,9 +296,5 @@ internal class AndroidPlaybackCoordinator(
             .setUri(item.source.uri)
             .setMimeType(mimeType)
             .build()
-    }
-
-    private companion object {
-        const val PRELOAD_WINDOW_RADIUS = 4
     }
 }
