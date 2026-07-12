@@ -183,28 +183,7 @@ private fun VideoFeedItemView(
                     .focusable(false),
         )
 
-        // Seamless poster image overlay (Stage 1.1)
-        val posterAlpha by animateFloatAsState(
-            targetValue = if (ui.playback.firstFrameRendered) 0f else 1f,
-            animationSpec = tween(durationMillis = 300),
-            label = "PosterAlpha",
-        )
-        if (posterAlpha > 0f) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .alpha(posterAlpha)
-                        .background(Color.DarkGray),
-            ) {
-                AsyncImage(
-                    model = ui.playback.posterUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
+        VideoPosterOverlay(ui.playback)
 
         Column(
             modifier =
@@ -217,6 +196,38 @@ private fun VideoFeedItemView(
             Text(text = ui.item.subtitle, color = Color.LightGray)
             Text(text = ui.item.source.streamType.name, color = Color.LightGray)
         }
+    }
+}
+
+@Composable
+private fun VideoPosterOverlay(playback: PagePlaybackState) {
+    val posterAlpha by animateFloatAsState(
+        targetValue = if (playback.firstFrameRendered) 0f else 1f,
+        animationSpec = tween(durationMillis = 300),
+        label = "PosterAlpha",
+    )
+    if (posterAlpha <= 0f) return
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .alpha(posterAlpha)
+                .background(Color.DarkGray),
+    ) {
+        playback.placeholderUrl?.let { placeholderUrl ->
+            AsyncImage(
+                model = placeholderUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        AsyncImage(
+            model = playback.posterUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 

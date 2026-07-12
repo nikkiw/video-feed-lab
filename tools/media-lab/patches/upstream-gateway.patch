@@ -1,0 +1,23 @@
+diff --git a/compose.yaml b/compose.yaml
+--- a/compose.yaml
++++ b/compose.yaml
+@@ -63,6 +63,7 @@ services:
+     volumes:
+       - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+       - ./gateway/html:/usr/share/nginx/html:ro
++      - ./gateway/project-routes:/etc/nginx/project-routes:ro
+     depends_on:
+       - origin
+       - imgproxy
+diff --git a/gateway/nginx.conf b/gateway/nginx.conf
+--- a/gateway/nginx.conf
++++ b/gateway/nginx.conf
+@@ -102,5 +102,8 @@ http {
+       proxy_http_version 1.1;
+       proxy_set_header Connection "";
+     }
++
++    # Optional routes supplied by projects using this local lab.
++    include /etc/nginx/project-routes/*.conf;
+   }
+ }

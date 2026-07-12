@@ -49,7 +49,11 @@ internal class AndroidPlaybackCoordinator(
         val positionMs = session.positionFor(items[index].id)
         val acquisition = playerPool.acquire(index, mediaItems[index], positionMs)
 
-        session.assign(acquisition, items[index].thumbnailUrlAt(positionMs))
+        session.assign(
+            acquisition = acquisition,
+            posterUrl = items[index].thumbnailUrlAt(positionMs),
+            placeholderUrl = items[index].images.blurredPosterUrl,
+        )
         metrics.startupRequested(acquisition.assignment, acquisition.source, direction)
         playerPool.setMuted(session.isMuted)
         acquisition.player.playWhenReady = true
@@ -68,7 +72,11 @@ internal class AndroidPlaybackCoordinator(
         preloader.updateWindow(session.currentIndex.coerceAtLeast(0), direction)
         val positionMs = session.positionFor(items[index].id)
         playerPool.prepareStandby(index, mediaItems[index], positionMs)?.let { acquisition ->
-            session.assign(acquisition, items[index].thumbnailUrlAt(positionMs))
+            session.assign(
+                acquisition = acquisition,
+                posterUrl = items[index].thumbnailUrlAt(positionMs),
+                placeholderUrl = items[index].images.blurredPosterUrl,
+            )
         }
     }
 
@@ -121,7 +129,11 @@ internal class AndroidPlaybackCoordinator(
         val candidate = listOf(preferred, fallback).firstOrNull { it in items.indices } ?: return
         val positionMs = session.positionFor(items[candidate].id)
         playerPool.prepareStandby(candidate, mediaItems[candidate], positionMs)?.let { acquisition ->
-            session.assign(acquisition, items[candidate].thumbnailUrlAt(positionMs))
+            session.assign(
+                acquisition = acquisition,
+                posterUrl = items[candidate].thumbnailUrlAt(positionMs),
+                placeholderUrl = items[candidate].images.blurredPosterUrl,
+            )
         }
     }
 

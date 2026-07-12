@@ -67,15 +67,84 @@ Then:
 ./gradlew :androidApp:installDebug
 ```
 
-## Replace the demo catalog with real vertical 9:16 assets
+## Universal Media Lab
 
-For a realistic experiment, upload 5–10 vertical MP4 files to Mux (or another managed video platform), then replace the URLs in:
+The project integrates with `universal-media-lab` to simulate realistic, non-ideal network profiles (LTE, flaky connections) and server-side faults (TTFB delays, HTTP 500 status codes). 
 
-```text
-shared/src/commonMain/.../DemoVideoCatalog.kt
-```
+The setup script clones the lab at a pinned commit into the ignored `.local/universal-media-lab` directory and applies Nginx route overlays.
 
-The app itself still does not need a backend for public playback URLs.
+### Quickstart with 20 Real Video Assets
+
+1. **Bootstrap the Media Lab**:
+   Run the following command to clone the lab, download 20 sample video files in parallel, transcode them into progressive MP4, HLS, and DASH streams, and start the Docker Compose stack:
+   ```bash
+   make media-lab-bootstrap
+   ```
+
+2. **Verify Setup**:
+   Ensure that the gateway endpoints are serving all manifests and assets properly:
+   ```bash
+   make media-lab-smoke
+   ```
+
+3. **Shutdown**:
+   To stop the container stack, run:
+   ```bash
+   make media-lab-down
+   ```
+
+### Root Makefile Commands Reference
+
+All commands should be executed from the root of the KMP project:
+
+| Command | Description |
+|---|---|
+| `make media-lab-setup` | Clones and applies the video-feed Nginx configurations overlay to the lab. |
+| `make media-lab-download-videos` | Downloads 20 lightweight, high-quality sample videos in parallel to the lab inbox. |
+| `make media-lab-bootstrap` | Downloads, transcodes (ingests) all 20 videos, starts Docker containers, and runs smoke tests. |
+| `make media-lab-up` | Starts the Docker containers (Nginx gateway, origin, Toxiproxy, imgproxy, Wiremock). |
+| `make media-lab-down` | Stops the active Docker containers. |
+| `make media-lab-smoke` | Runs network connectivity integration checks against Toxiproxy and gateway. |
+| `make media-lab-nginx-test` | Validates Nginx configurations inside the gateway. |
+
+### Network Connectivity Guide
+
+The Media Lab uses Toxiproxy to simulate network conditions (Toxiproxy operates on port `18080` for dynamic profiles, and `18081`-`18088` for stable networks). Below is how each client platform connects to these services:
+
+#### A. Android Emulator (AVD)
+* **Host Address**: The emulator maps the host machine loopback (`localhost`) to the IP address `10.0.2.2`.
+* **Resolution**: The app is pre-configured to resolve server paths automatically to `http://10.0.2.2:<port>`.
+* **HTTP (Cleartext)**: Cleartext HTTP traffic is enabled only for the Android `debug` source set. No additional configuration is required.
+
+#### B. Physical Android Device (over USB)
+* **Host Address**: A physical device connected via USB cannot resolve `10.0.2.2`. It must use `127.0.0.1`.
+* **Port Forwarding**: You must reverse-forward Nginx and all Toxiproxy ports to your host machine via ADB:
+  ```bash
+  # Forward main gateway and dynamic Toxiproxy ports
+  adb reverse tcp:8080 tcp:8080
+  adb reverse tcp:18080 tcp:18080
+  
+  # Forward stable network ports (18081: clean, 18083: LTE, 18087: flaky, etc.)
+  for port in {18081..18088}; do adb reverse tcp:$port tcp:$port; done
+  ```
+  Once run, the app on the physical device will connect to `127.0.0.1:18080` and load the video feeds successfully.
+
+#### C. Desktop Target (JVM)
+* **Host Address**: Runs natively on the host machine. Resolves directly to `127.0.0.1` (localhost).
+* **Port Forwarding**: No port forwarding is required.
+
+### Video Catalog and Media Contracts
+
+The app's video catalog is managed dynamically by [DemoVideoCatalog.kt](file:///Users/dev/Developer/@PortfolioProjects/video-feed-lab/shared/src/commonMain/kotlin/com/nikkiw/videofeedlab/shared/catalog/DemoVideoCatalog.kt). It loops over the 20 downloaded assets and maps them into the video feed, cycling through different streaming protocols (HLS, DASH, Progressive MP4) and network profiles (Clean, LTE, Flaky) to simulate real-world production conditions.
+
+The gateway exposes the following project contracts:
+* `GET /vfl/api/feed` (Returns the JSON feed catalog)
+* `GET /vfl/media/<asset-id>/progressive` (Standard MP4 stream)
+* `GET /vfl/media/<asset-id>/hls/master.m3u8` (HLS master playlist)
+* `GET /vfl/media/<asset-id>/dash/manifest.mpd` (DASH manifest)
+* `GET /vfl/poster/<asset-id>/feed.webp` (Poster image, 720×1280)
+* `GET /vfl/poster/<asset-id>/thumbnail.webp` (Thumbnail image, 360×640)
+* `GET /vfl/fault/ttfb/<delayMs>/<asset-id>/hls/master.m3u8` (HLS stream delayed by 200/1000/3000 ms)
 
 For future signed URLs, keep the secret on a server and implement the existing `PlaybackUrlProvider` boundary. Never put a signing secret in the APK.
 

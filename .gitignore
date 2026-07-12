@@ -18,6 +18,9 @@ kotlin-js-store/
 *.hprof
 *.log
 
+# GitHub-cloned local infrastructure customized by scripts/media-lab/setup.sh
+/.local/
+
 # OS files
 .DS_Store
 Thumbs.db

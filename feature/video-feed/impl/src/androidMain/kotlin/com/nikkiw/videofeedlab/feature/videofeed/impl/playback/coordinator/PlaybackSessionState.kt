@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.update
 internal data class PagePlaybackState(
     val player: ExoPlayer? = null,
     val posterUrl: String,
+    val placeholderUrl: String? = null,
     val assignment: SlotAssignment? = null,
     val firstFrameRendered: Boolean = false,
 )
@@ -22,7 +23,12 @@ internal class PlaybackSessionState(
     private val positions = mutableMapOf<String, Long>()
     private val mutablePages =
         MutableStateFlow(
-            items.indices.associateWith { index -> PagePlaybackState(posterUrl = items[index].thumbnailUrl) },
+            items.indices.associateWith { index ->
+                PagePlaybackState(
+                    posterUrl = items[index].images.posterUrl,
+                    placeholderUrl = items[index].images.blurredPosterUrl,
+                )
+            },
         )
     private var released = false
 
@@ -52,6 +58,7 @@ internal class PlaybackSessionState(
     fun assign(
         acquisition: PlayerAcquisition,
         posterUrl: String,
+        placeholderUrl: String?,
     ) {
         if (released) return
         mutablePages.update { pages ->
@@ -61,6 +68,7 @@ internal class PlaybackSessionState(
                         page.copy(
                             player = acquisition.player,
                             posterUrl = posterUrl,
+                            placeholderUrl = placeholderUrl,
                             assignment = acquisition.assignment,
                             firstFrameRendered =
                                 page.assignment == acquisition.assignment && page.firstFrameRendered,

@@ -2,60 +2,99 @@ package com.nikkiw.videofeedlab.shared.catalog
 
 import com.nikkiw.videofeedlab.shared.model.PlaybackSource
 import com.nikkiw.videofeedlab.shared.model.StreamType
+import com.nikkiw.videofeedlab.shared.model.VideoImageSet
 import com.nikkiw.videofeedlab.shared.model.VideoItem
 
 object DemoVideoCatalog {
-    /**
-     * Public test streams only. Replace these with your own vertical Mux playback IDs
-     * when you want a realistic 9:16 dataset.
-     */
-    val items: List<VideoItem> =
-        listOf(
-            VideoItem(
-                id = "mux-hls-vod",
-                title = "Mux HLS VOD",
-                subtitle = "Adaptive HLS test stream",
-                source =
-                    PlaybackSource(
-                        uri = "https://stream.mux.com/yb2L3z3Z4IKQH02HYkf9xPToVYkOC85WA.m3u8",
-                        streamType = StreamType.HLS,
-                    ),
-                thumbnailUrl = "https://image.mux.com/yb2L3z3Z4IKQH02HYkf9xPToVYkOC85WA/thumbnail.jpg?time=7",
-                timeBasedThumbnailUrlTemplate =
-                    "https://image.mux.com/yb2L3z3Z4IKQH02HYkf9xPToVYkOC85WA/thumbnail.jpg?time={timeSeconds}",
-            ),
-            VideoItem(
-                id = "shaka-live-hls",
-                title = "Shaka Live HLS",
-                subtitle = "Live adaptive HLS stream",
-                source =
-                    PlaybackSource(
-                        uri = "https://storage.googleapis.com/shaka-live-assets/player-source.m3u8",
-                        streamType = StreamType.HLS,
-                    ),
-                thumbnailUrl = "https://picsum.photos/id/15/1080/1920",
-            ),
-            VideoItem(
-                id = "tears-of-steel-dash",
-                title = "Tears of Steel",
-                subtitle = "Adaptive DASH test stream",
-                source =
-                    PlaybackSource(
-                        uri = "https://storage.googleapis.com/shaka-demo-assets/tos-ttml/dash.mpd",
-                        streamType = StreamType.DASH,
-                    ),
-                thumbnailUrl = "https://picsum.photos/id/10/1080/1920",
-            ),
-            VideoItem(
-                id = "big-buck-bunny-dash",
-                title = "Big Buck Bunny",
-                subtitle = "DASH-IF multi-rate sample",
-                source =
-                    PlaybackSource(
-                        uri = "https://dash.akamaized.net/dash264/TestCases/1c/qualcomm/2/MultiRate.mpd",
-                        streamType = StreamType.DASH,
-                    ),
-                thumbnailUrl = "https://picsum.photos/id/12/1080/1920",
-            ),
+    val assetIds = listOf(
+        "bolt-detection",
+        "bolt-multi-size-detection",
+        "bottle-detection",
+        "car-detection",
+        "classroom",
+        "driver-action-recognition",
+        "face-demographics-walking-and-pause",
+        "face-demographics-walking",
+        "fruit-and-vegetable-detection",
+        "head-pose-face-detection-female-and-male",
+        "head-pose-face-detection-female",
+        "head-pose-face-detection-male",
+        "one-by-one-person-detection",
+        "people-detection",
+        "person-bicycle-car-detection",
+        "store-aisle-detection",
+        "worker-zone-detection",
+        "big-buck-bunny",
+        "echo-hereweare",
+        "big-buck-bunny-1080p-30sec"
+    )
+
+    val items: List<VideoItem> = create()
+
+    fun create(
+        environment: MediaLabEnvironment = MediaLabEnvironment(),
+    ): List<VideoItem> {
+        val routes = VideoFeedLabRoutes(MediaLabUrlResolver(environment))
+        
+        return assetIds.mapIndexed { index, assetId ->
+            // Cycle stream types: HLS, DASH, Progressive
+            val streamType = when (index % 3) {
+                0 -> StreamType.HLS
+                1 -> StreamType.DASH
+                else -> StreamType.PROGRESSIVE
+            }
+            
+            // Cycle network profiles to test different environments
+            val profile = when (index % 3) {
+                0 -> MediaLabNetworkProfile.CLEAN
+                1 -> MediaLabNetworkProfile.LTE
+                else -> MediaLabNetworkProfile.FLAKY
+            }
+            
+            val uri = when (streamType) {
+                StreamType.HLS -> routes.hls(assetId, profile)
+                StreamType.DASH -> routes.dash(assetId, profile)
+                StreamType.PROGRESSIVE -> routes.progressive(assetId, profile)
+            }
+            
+            // Generate a human-readable title from the asset ID
+            val title = assetId.split("-", "_")
+                .joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
+            
+            val subtitle = "${streamType.name} · ${profile.name.lowercase()}"
+            
+            val images = VideoImageSet(
+                posterUrl = routes.posterFeed(assetId),
+                thumbnailUrl = routes.posterThumbnail(assetId),
+                blurredPosterUrl = routes.posterPlaceholder(assetId),
+                avifPosterUrl = routes.posterAvif(assetId),
+            )
+            
+            video(
+                id = "vfl-$assetId",
+                title = title,
+                subtitle = subtitle,
+                uri = uri,
+                streamType = streamType,
+                images = images,
+            )
+        }
+    }
+
+    private fun video(
+        id: String,
+        title: String,
+        subtitle: String,
+        uri: String,
+        streamType: StreamType,
+        images: VideoImageSet,
+    ): VideoItem =
+        VideoItem(
+            id = id,
+            title = title,
+            subtitle = subtitle,
+            source = PlaybackSource(uri, streamType),
+            thumbnailUrl = images.thumbnailUrl,
+            images = images,
         )
 }
