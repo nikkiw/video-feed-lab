@@ -10,6 +10,7 @@ interface VideoFeedComponent {
         val items: List<VideoItem>,
         val activeIndex: Int,
         val isMuted: Boolean,
+        val isPlaying: Boolean,
         val debugState: PlaybackDebugState,
     )
 

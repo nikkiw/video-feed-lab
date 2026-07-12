@@ -11,7 +11,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val videoFeedEntry = createVideoFeedEntry(defaultComponentContext())
         setContent {
-            videoFeedEntry.content()
+            videoFeedEntry.Content()
         }
     }
 }

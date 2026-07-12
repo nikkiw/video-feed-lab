@@ -8,7 +8,7 @@ import com.nikkiw.videofeedlab.shared.catalog.DemoVideoCatalog
 
 class DefaultVideoFeedEntry(private val componentContext: ComponentContext) : VideoFeedEntry {
     @Composable
-    override fun content() {
+    override fun Content() {
         val component =
             remember(componentContext) {
                 DefaultVideoFeedComponent(componentContext, DemoVideoCatalog.items)

@@ -17,7 +17,7 @@ fun main() {
     application {
         Window(onCloseRequest = ::exitApplication, title = "Video Feed Lab") {
             val videoFeedEntry = remember { createVideoFeedEntry(rootContext) }
-            videoFeedEntry.content()
+            videoFeedEntry.Content()
         }
     }
 }
