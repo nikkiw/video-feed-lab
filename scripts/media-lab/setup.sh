@@ -3,7 +3,7 @@ set -eu
 
 ROOT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
 REPOSITORY_URL=${MEDIA_LAB_REPOSITORY_URL:-https://github.com/nikkiw/universal-media-lab.git}
-MEDIA_LAB_REF=${MEDIA_LAB_REF:-b1c7da8210774d32c88b37172443499705204fbb}
+MEDIA_LAB_REF=${MEDIA_LAB_REF:-ad41531c690ea6e19d84a2b526d8d34dccc97e5b}
 TARGET_DIR=${MEDIA_LAB_DIR:-$ROOT_DIR/.local/universal-media-lab}
 ROUTE_SOURCE=$ROOT_DIR/tools/media-lab/overlays/video-feed-lab.conf
 MARKER_FILE=$TARGET_DIR/.git/video-feed-lab-customization
