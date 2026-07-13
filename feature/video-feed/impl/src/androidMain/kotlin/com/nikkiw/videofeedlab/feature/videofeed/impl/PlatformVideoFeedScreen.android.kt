@@ -338,54 +338,60 @@ private fun PremiumVideoLoader(modifier: Modifier = Modifier) {
                 },
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(54.dp)
-                    .background(
-                        brush =
-                            Brush.radialGradient(
-                                colors =
-                                    listOf(
-                                        Color(0x2500F2FE),
-                                        Color(0x00000000),
-                                    ),
-                            ),
-                        shape = androidx.compose.foundation.shape.CircleShape,
-                    ),
-        )
+        LoaderGlow()
+        LoaderRing(rotation = rotation, sweepProgress = sweepProgress)
+    }
+}
 
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokeWidth = 4.5.dp.toPx()
-            val gradientColors =
-                listOf(
-                    Color(0xFF00F2FE),
-                    Color(0xFF4FACFE),
-                    Color(0xFFF355FF),
-                    Color(0xFF00F2FE),
-                )
+@Composable
+private fun LoaderGlow() {
+    Box(
+        modifier =
+            Modifier
+                .size(54.dp)
+                .background(
+                    brush =
+                        Brush.radialGradient(
+                            colors =
+                                listOf(
+                                    Color(0x2500F2FE),
+                                    Color(0x00000000),
+                                ),
+                        ),
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                ),
+    )
+}
 
-            val sweepBrush =
-                Brush.sweepGradient(
-                    colors = gradientColors,
-                    center = center,
-                )
-
-            drawCircle(
-                color = Color(0x1AFFFFFF),
-                radius = (size.minDimension - strokeWidth) / 2,
-                style = Stroke(width = strokeWidth),
+@Composable
+private fun LoaderRing(
+    rotation: Float,
+    sweepProgress: Float,
+) {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val strokeWidth = 4.5.dp.toPx()
+        val gradientColors =
+            listOf(
+                Color(0xFF00F2FE),
+                Color(0xFF4FACFE),
+                Color(0xFFF355FF),
+                Color(0xFF00F2FE),
             )
+        val sweepBrush = Brush.sweepGradient(colors = gradientColors, center = center)
 
-            rotate(degrees = rotation) {
-                drawArc(
-                    brush = sweepBrush,
-                    startAngle = 0f,
-                    sweepAngle = sweepProgress * 360f,
-                    useCenter = false,
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
-                )
-            }
+        drawCircle(
+            color = Color(0x1AFFFFFF),
+            radius = (size.minDimension - strokeWidth) / 2,
+            style = Stroke(width = strokeWidth),
+        )
+        rotate(degrees = rotation) {
+            drawArc(
+                brush = sweepBrush,
+                startAngle = 0f,
+                sweepAngle = sweepProgress * 360f,
+                useCenter = false,
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+            )
         }
     }
 }
