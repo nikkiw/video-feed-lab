@@ -5,6 +5,13 @@ import android.widget.FrameLayout
 import androidx.annotation.OptIn
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -15,6 +22,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.VerticalPager
@@ -31,11 +39,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.composed
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
@@ -222,7 +238,7 @@ private fun VideoFeedItemView(
                     .focusable(false),
         )
 
-        VideoPosterOverlay(ui.playback)
+        VideoPosterOverlay(playback = ui.playback, active = ui.active)
 
         Column(
             modifier =
@@ -238,8 +254,131 @@ private fun VideoFeedItemView(
     }
 }
 
+fun Modifier.shimmerBackground(): Modifier = composed {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val progress by transition.animateFloat(
+        initialValue = -1f,
+        targetValue = 2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmerProgress"
+    )
+
+    val shimmerColors = listOf(
+        Color(0xFF16161A),
+        Color(0xFF2A2A32),
+        Color(0xFF16161A)
+    )
+
+    drawBehind {
+        val width = size.width
+        val height = size.height
+        val xStart = progress * width
+        val xEnd = xStart + width
+
+        val brush = Brush.linearGradient(
+            colors = shimmerColors,
+            start = Offset(xStart, 0f),
+            end = Offset(xEnd, height)
+        )
+        drawRect(brush = brush)
+    }
+}
+
 @Composable
-private fun VideoPosterOverlay(playback: PagePlaybackState) {
+private fun PremiumVideoLoader(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "loader")
+
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
+    val scale by transition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+
+    val sweepProgress by transition.animateFloat(
+        initialValue = 0.15f,
+        targetValue = 0.75f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "sweep"
+    )
+
+    Box(
+        modifier = modifier
+            .size(72.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0x2500F2FE),
+                            Color(0x00000000)
+                        )
+                    ),
+                    shape = androidx.compose.foundation.shape.CircleShape
+                )
+        )
+
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val strokeWidth = 4.5.dp.toPx()
+            val gradientColors = listOf(
+                Color(0xFF00F2FE),
+                Color(0xFF4FACFE),
+                Color(0xFFF355FF),
+                Color(0xFF00F2FE)
+            )
+
+            val sweepBrush = Brush.sweepGradient(
+                colors = gradientColors,
+                center = center
+            )
+
+            drawCircle(
+                color = Color(0x1AFFFFFF),
+                radius = (size.minDimension - strokeWidth) / 2,
+                style = Stroke(width = strokeWidth)
+            )
+
+            rotate(degrees = rotation) {
+                drawArc(
+                    brush = sweepBrush,
+                    startAngle = 0f,
+                    sweepAngle = sweepProgress * 360f,
+                    useCenter = false,
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoPosterOverlay(playback: PagePlaybackState, active: Boolean) {
     val posterAlpha by animateFloatAsState(
         targetValue = if (playback.firstFrameRendered) 0f else 1f,
         animationSpec = tween(durationMillis = 300),
@@ -251,8 +390,17 @@ private fun VideoPosterOverlay(playback: PagePlaybackState) {
             Modifier
                 .fillMaxSize()
                 .alpha(posterAlpha)
-                .background(Color.DarkGray),
+                .shimmerBackground(),
+        contentAlignment = Alignment.Center,
     ) {
+        playback.lqip?.let { lqip ->
+            AsyncImage(
+                model = lqip,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         playback.placeholderUrl?.let { placeholderUrl ->
             AsyncImage(
                 model = placeholderUrl,
@@ -267,6 +415,10 @@ private fun VideoPosterOverlay(playback: PagePlaybackState) {
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
         )
+
+        if (active && !playback.firstFrameRendered) {
+            PremiumVideoLoader()
+        }
     }
 }
 

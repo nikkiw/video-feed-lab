@@ -13,6 +13,7 @@ internal data class PagePlaybackState(
     val player: ExoPlayer? = null,
     val posterUrl: String,
     val placeholderUrl: String? = null,
+    val lqip: String? = null,
     val assignment: SlotAssignment? = null,
     val firstFrameRendered: Boolean = false,
 )
@@ -27,6 +28,7 @@ internal class PlaybackSessionState(
                 PagePlaybackState(
                     posterUrl = items[index].images.posterUrl,
                     placeholderUrl = items[index].images.blurredPosterUrl,
+                    lqip = items[index].images.lqip,
                 )
             },
         )

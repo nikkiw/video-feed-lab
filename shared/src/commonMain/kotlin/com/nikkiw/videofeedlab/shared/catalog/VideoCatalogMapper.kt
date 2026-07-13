@@ -27,6 +27,7 @@ class VideoCatalogMapper(
                     thumbnailUrl = item.thumbnailUrl.resolveImage(feed.baseUrl),
                     blurredPosterUrl = item.blurredPosterUrl?.resolveImage(feed.baseUrl),
                     avifPosterUrl = item.avifPosterUrl?.resolveImage(feed.baseUrl),
+                    lqip = item.lqip,
                 )
 
             VideoItem(

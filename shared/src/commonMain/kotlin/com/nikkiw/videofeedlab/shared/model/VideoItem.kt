@@ -19,6 +19,7 @@ data class VideoImageSet(
     val thumbnailUrl: String,
     val blurredPosterUrl: String? = null,
     val avifPosterUrl: String? = null,
+    val lqip: String? = null,
 )
 
 /** Returns the best poster for [positionMs]. Templates use `{timeSeconds}` as a placeholder. */

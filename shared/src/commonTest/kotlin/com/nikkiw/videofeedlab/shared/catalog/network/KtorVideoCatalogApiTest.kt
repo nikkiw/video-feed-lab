@@ -42,6 +42,7 @@ class KtorVideoCatalogApiTest {
 
             assertEquals("http://lab-host:18083/vfl/api/feed", requestedUrl)
             assertEquals("video", feed.items.single().id)
+            assertEquals("data:image/webp;base64,lqip-content", feed.items.single().lqip)
             client.close()
         }
 
@@ -57,6 +58,7 @@ class KtorVideoCatalogApiTest {
                   "title": "Video",
                   "posterUrl": "/poster.webp",
                   "thumbnailUrl": "/thumbnail.webp",
+                  "lqip": "data:image/webp;base64,lqip-content",
                   "hlsUrl": "/video.m3u8",
                   "unknownField": true
                 }

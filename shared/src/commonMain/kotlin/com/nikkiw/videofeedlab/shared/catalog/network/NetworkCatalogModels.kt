@@ -17,6 +17,7 @@ data class NetworkCatalogItem(
     val thumbnailUrl: String,
     val blurredPosterUrl: String? = null,
     val avifPosterUrl: String? = null,
+    val lqip: String? = null,
     val progressiveUrl: String? = null,
     val hlsUrl: String? = null,
     val dashUrl: String? = null,

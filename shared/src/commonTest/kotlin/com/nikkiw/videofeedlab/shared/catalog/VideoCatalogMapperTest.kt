@@ -25,6 +25,7 @@ class VideoCatalogMapperTest {
         assertEquals(StreamType.PROGRESSIVE, items[2].source.streamType)
         assertEquals("http://lab-host:18087/vfl/media/three/progressive/video.mp4", items[2].source.uri)
         assertEquals("http://lab-host:18081/img/one.webp", items[0].images.posterUrl)
+        assertEquals("data:image/webp;base64,lqip-content-one", items[0].images.lqip)
     }
 
     @Test
@@ -33,6 +34,7 @@ class VideoCatalogMapperTest {
 
         assertEquals("https://cdn.example/vfl/media/one/hls/master.m3u8", mapped.single().source.uri)
         assertEquals("https://cdn.example/img/one.webp", mapped.single().images.posterUrl)
+        assertEquals("data:image/webp;base64,lqip-content-one", mapped.single().images.lqip)
     }
 
     private fun feed(
@@ -46,6 +48,7 @@ class VideoCatalogMapperTest {
             title = id,
             posterUrl = "/img/$id.webp",
             thumbnailUrl = "/img/$id-thumbnail.webp",
+            lqip = "data:image/webp;base64,lqip-content-$id",
             playback =
                 listOf(
                     NetworkPlaybackSource("hls", url = "/vfl/media/$id/hls/master.m3u8"),
