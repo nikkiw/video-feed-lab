@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Local Docker lab only. Release builds continue to reject cleartext HTTP. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

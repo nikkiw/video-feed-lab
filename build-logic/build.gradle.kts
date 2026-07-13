@@ -16,20 +16,20 @@ java {
 gradlePlugin {
     plugins {
         register("featureApiConvention") {
-            id = "com.example.feature-api-convention"
-            implementationClass = "com.example.buildlogic.FeatureApiConventionPlugin"
+            id = "com.nikkiw.videofeedlab.feature-api-convention"
+            implementationClass = "com.nikkiw.videofeedlab.buildlogic.FeatureApiConventionPlugin"
         }
         register("featureImplConvention") {
-            id = "com.example.feature-impl-convention"
-            implementationClass = "com.example.buildlogic.FeatureImplConventionPlugin"
+            id = "com.nikkiw.videofeedlab.feature-impl-convention"
+            implementationClass = "com.nikkiw.videofeedlab.buildlogic.FeatureImplConventionPlugin"
         }
         register("detektConvention") {
-            id = "com.example.detekt-convention"
-            implementationClass = "com.example.buildlogic.DetektConventionPlugin"
+            id = "com.nikkiw.videofeedlab.detekt-convention"
+            implementationClass = "com.nikkiw.videofeedlab.buildlogic.DetektConventionPlugin"
         }
         register("spotlessConvention") {
-            id = "com.example.spotless-convention"
-            implementationClass = "com.example.buildlogic.SpotlessConventionPlugin"
+            id = "com.nikkiw.videofeedlab.spotless-convention"
+            implementationClass = "com.nikkiw.videofeedlab.buildlogic.SpotlessConventionPlugin"
         }
     }
 }

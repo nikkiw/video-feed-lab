@@ -7,8 +7,8 @@ plugins {
     application
 
     // Convention plugins for static analysis and formatting
-    id("com.example.detekt-convention")
-    id("com.example.spotless-convention")
+    id("com.nikkiw.videofeedlab.detekt-convention")
+    id("com.nikkiw.videofeedlab.spotless-convention")
 }
 
 java {
@@ -18,14 +18,15 @@ java {
 }
 
 application {
-    mainClass.set("com.example.desktop.MainKt")
+    mainClass.set("com.nikkiw.videofeedlab.desktop.MainKt")
 }
 
 dependencies {
     implementation(project(":shared"))
-    implementation(project(":feature:home:api"))
-    implementation(project(":feature:home:impl"))
+    implementation(project(":feature:video-feed:api"))
+    implementation(project(":feature:video-feed:impl"))
     implementation(compose.desktop.currentOs)
     implementation(libs.compose.foundation)
     implementation(libs.compose.ui)
+    implementation(libs.koin.core)
 }
