@@ -3,9 +3,8 @@ set -eu
 
 ROOT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
 REPOSITORY_URL=${MEDIA_LAB_REPOSITORY_URL:-https://github.com/nikkiw/universal-media-lab.git}
-MEDIA_LAB_REF=${MEDIA_LAB_REF:-9215010ecc4730f47e5c810a2dabae43ffc36dac}
+MEDIA_LAB_REF=${MEDIA_LAB_REF:-b1c7da8210774d32c88b37172443499705204fbb}
 TARGET_DIR=${MEDIA_LAB_DIR:-$ROOT_DIR/.local/universal-media-lab}
-PATCH_FILE=$ROOT_DIR/tools/media-lab/patches/upstream-gateway.patch
 ROUTE_SOURCE=$ROOT_DIR/tools/media-lab/overlays/video-feed-lab.conf
 MARKER_FILE=$TARGET_DIR/.git/video-feed-lab-customization
 
@@ -25,36 +24,51 @@ ACTUAL_REMOTE=$(git -C "$TARGET_DIR" remote get-url origin)
 [ "$ACTUAL_REMOTE" = "$REPOSITORY_URL" ] ||
   fail "origin is $ACTUAL_REMOTE; expected $REPOSITORY_URL"
 
+CURRENT_REF=""
 if [ -f "$MARKER_FILE" ]; then
-  APPLIED_REF=$(cat "$MARKER_FILE")
-  [ "$APPLIED_REF" = "$MEDIA_LAB_REF" ] ||
-    fail "checkout is customized for $APPLIED_REF; use a new MEDIA_LAB_DIR for $MEDIA_LAB_REF"
-  git -C "$TARGET_DIR" apply --reverse --check "$PATCH_FILE" ||
-    fail "the upstream gateway patch is missing or was modified"
+  CURRENT_REF=$(cat "$MARKER_FILE")
+fi
+
+if [ "$CURRENT_REF" != "$MEDIA_LAB_REF" ]; then
+  printf 'Checking out commit %s (previous: %s)...\n' "$MEDIA_LAB_REF" "${CURRENT_REF:-none}"
+  
+  # Check if there are local modifications to tracked files
+  if [ -n "$(git -C "$TARGET_DIR" status --porcelain -uno)" ]; then
+    fail "checkout at $TARGET_DIR has local modifications to tracked files; please discard them first"
+  fi
+
+  git -C "$TARGET_DIR" fetch --depth 1 origin "$MEDIA_LAB_REF"
+  git -C "$TARGET_DIR" checkout --detach FETCH_HEAD
+  
+  mkdir -p "$TARGET_DIR/gateway/project-routes"
+  cp "$ROUTE_SOURCE" "$TARGET_DIR/gateway/project-routes/video-feed-lab.conf"
+  printf '%s\n' "$MEDIA_LAB_REF" > "$MARKER_FILE"
+  printf 'Configured Nginx route overlay.\n'
+else
+  # Just refresh route configuration if it changed
   if ! cmp -s "$ROUTE_SOURCE" "$TARGET_DIR/gateway/project-routes/video-feed-lab.conf"; then
     cp "$ROUTE_SOURCE" "$TARGET_DIR/gateway/project-routes/video-feed-lab.conf"
     printf 'Refreshed video-feed-lab Nginx route overlay.\n'
   fi
-  printf 'GitHub checkout is already customized: %s\n' "$TARGET_DIR"
-else
-  [ -z "$(git -C "$TARGET_DIR" status --porcelain)" ] ||
-    fail "checkout has local changes before customization"
-
-  git -C "$TARGET_DIR" fetch --depth 1 origin "$MEDIA_LAB_REF"
-  git -C "$TARGET_DIR" checkout --detach FETCH_HEAD
-
-  git -C "$TARGET_DIR" apply --check "$PATCH_FILE"
-  git -C "$TARGET_DIR" apply "$PATCH_FILE"
-  mkdir -p "$TARGET_DIR/gateway/project-routes"
-  cp "$ROUTE_SOURCE" "$TARGET_DIR/gateway/project-routes/video-feed-lab.conf"
-  printf '%s\n' "$MEDIA_LAB_REF" > "$MARKER_FILE"
-  printf 'Applied video-feed-lab Nginx customization.\n'
 fi
 
 if [ ! -f "$TARGET_DIR/.env" ]; then
   cp "$TARGET_DIR/.env.example" "$TARGET_DIR/.env"
   printf 'Created %s/.env from .env.example.\n' "$TARGET_DIR"
 fi
+
+# Ensure MEDIA_URL_PREFIX is set to /vfl/media in the .env file
+if grep -q '^MEDIA_URL_PREFIX=' "$TARGET_DIR/.env"; then
+  tmp_env="$TARGET_DIR/.env.tmp"
+  awk '
+    BEGIN { FS=OFS="=" }
+    $1 == "MEDIA_URL_PREFIX" { $2 = "/vfl/media" }
+    { print }
+  ' "$TARGET_DIR/.env" > "$tmp_env" && mv "$tmp_env" "$TARGET_DIR/.env"
+else
+  printf '\nMEDIA_URL_PREFIX=/vfl/media\n' >> "$TARGET_DIR/.env"
+fi
+printf 'Configured MEDIA_URL_PREFIX=/vfl/media in .env\n'
 
 cat <<EOF
 
