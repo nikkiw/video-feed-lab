@@ -12,6 +12,7 @@ interface VideoFeedComponent {
         val isMuted: Boolean,
         val isPlaying: Boolean,
         val debugState: PlaybackDebugState,
+        val catalogLoadState: CatalogLoadState,
     )
 
     fun onPageSelected(index: Int)
@@ -19,4 +20,6 @@ interface VideoFeedComponent {
     fun onToggleMute()
 
     fun onTogglePlay()
+
+    fun onRetryLoad()
 }

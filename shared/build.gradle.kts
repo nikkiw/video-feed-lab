@@ -8,6 +8,7 @@ plugins {
     // New KMP Android Library plugin
     id("com.android.kotlin.multiplatform.library")
     id("org.jetbrains.kotlin.plugin.compose")
+    alias(libs.plugins.kotlinx.serialization)
 
     // Convention plugins for static analysis and formatting
     id("com.nikkiw.videofeedlab.detekt-convention")
@@ -31,15 +32,30 @@ kotlin {
                 implementation(libs.decompose)
                 implementation(libs.mvikotlin)
                 implementation(libs.mvikotlin.main)
+                implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.kotlinx.serialization.json)
+                implementation(libs.ktor.client.core)
+                implementation(libs.ktor.client.content.negotiation)
+                implementation(libs.ktor.serialization.kotlinx.json)
+                implementation(libs.koin.core)
             }
         }
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
+                implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.ktor.client.mock)
             }
         }
-        // Platform-specific source sets are created automatically.  If you need
-        // additional dependencies for a specific platform, you can declare them
-        // here.
+        val androidMain by getting {
+            dependencies {
+                implementation(libs.ktor.client.okhttp)
+            }
+        }
+        val desktopMain by getting {
+            dependencies {
+                implementation(libs.ktor.client.okhttp)
+            }
+        }
     }
 }

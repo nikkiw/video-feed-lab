@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material.Button
+import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -41,6 +43,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
+import com.nikkiw.videofeedlab.feature.videofeed.api.CatalogLoadState
 import com.nikkiw.videofeedlab.feature.videofeed.api.PlaybackDebugState
 import com.nikkiw.videofeedlab.feature.videofeed.api.VideoFeedComponent
 import com.nikkiw.videofeedlab.feature.videofeed.impl.playback.coordinator.AndroidPlaybackCoordinator
@@ -59,8 +62,19 @@ private data class VideoPageUi(
 @Composable
 internal actual fun PlatformVideoFeedScreen(component: VideoFeedComponent) {
     val model by component.models.subscribeAsState()
-    if (model.items.isEmpty()) return
+    when (val loadState = model.catalogLoadState) {
+        CatalogLoadState.Content -> VideoFeedContent(component, model)
+        CatalogLoadState.Loading -> CatalogStatusScreen(message = "Loading video catalog…", showProgress = true)
+        CatalogLoadState.Empty -> CatalogStatusScreen(message = "No videos found")
+        is CatalogLoadState.Error -> CatalogStatusScreen(message = loadState.message, onRetry = component::onRetryLoad)
+    }
+}
 
+@Composable
+private fun VideoFeedContent(
+    component: VideoFeedComponent,
+    model: VideoFeedComponent.Model,
+) {
     val context = LocalContext.current
     val coordinator =
         remember(model.items) {
@@ -133,6 +147,31 @@ internal actual fun PlatformVideoFeedScreen(component: VideoFeedComponent) {
                     .align(Alignment.TopStart)
                     .padding(12.dp),
         )
+    }
+}
+
+@Composable
+private fun CatalogStatusScreen(
+    message: String,
+    showProgress: Boolean = false,
+    onRetry: (() -> Unit)? = null,
+) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (showProgress) CircularProgressIndicator(color = Color.White)
+            Text(text = message, color = Color.White)
+            onRetry?.let { retry ->
+                Button(onClick = retry) {
+                    Text("Retry")
+                }
+            }
+        }
     }
 }
 

@@ -6,7 +6,8 @@ The project is based on the structure of `nikkiw/kmp-modular-template`: Android 
 
 ## What is implemented
 
-- KMP shared video model and public test catalog.
+- KMP shared video model and a Ktor-backed dynamic catalog.
+- Koin composition roots with constructor injection in feature code.
 - Feature API/implementation split.
 - Android short-video feed with `VerticalPager`.
 - One shared `ExoPlayer` instead of one player per list item.
@@ -49,7 +50,8 @@ shared
    ├─ VideoItem
    ├─ PlaybackSource
    ├─ StreamType
-   ├─ DemoVideoCatalog
+   ├─ VideoCatalogApi / VideoRepository
+   ├─ VideoCatalogMapper / playback policy
    └─ PlaybackUrlProvider boundary
 ```
 
@@ -135,7 +137,7 @@ The Media Lab uses Toxiproxy to simulate network conditions (Toxiproxy operates 
 
 ### Video Catalog and Media Contracts
 
-The app's video catalog is managed dynamically by [DemoVideoCatalog.kt](file:///Users/dev/Developer/@PortfolioProjects/video-feed-lab/shared/src/commonMain/kotlin/com/nikkiw/videofeedlab/shared/catalog/DemoVideoCatalog.kt). It loops over the 20 downloaded assets and maps them into the video feed, cycling through different streaming protocols (HLS, DASH, Progressive MP4) and network profiles (Clean, LTE, Flaky) to simulate real-world production conditions.
+The app loads its catalog from `GET /vfl/api/feed` through the shared Ktor client. The repository keeps a process-local, in-memory cache and maps catalog entries through an explicit playback policy that cycles HLS, DASH, and Progressive sources across Clean, LTE, and Flaky profiles. A failed request is surfaced as a retryable MVI state; the app does not silently fall back to static data.
 
 The gateway exposes the following project contracts:
 * `GET /vfl/api/feed` (Returns the JSON feed catalog)

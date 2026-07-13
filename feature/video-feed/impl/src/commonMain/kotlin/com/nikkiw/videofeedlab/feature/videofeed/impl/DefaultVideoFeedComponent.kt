@@ -4,23 +4,24 @@ import com.arkivanov.decompose.ComponentContext
 import com.arkivanov.decompose.value.Value
 import com.arkivanov.decompose.value.operator.map
 import com.arkivanov.mvikotlin.core.instancekeeper.getStore
-import com.arkivanov.mvikotlin.main.store.DefaultStoreFactory
+import com.arkivanov.mvikotlin.core.store.StoreFactory
 import com.nikkiw.videofeedlab.feature.videofeed.api.PlaybackDebugState
 import com.nikkiw.videofeedlab.feature.videofeed.api.VideoFeedComponent
 import com.nikkiw.videofeedlab.feature.videofeed.impl.store.VideoFeedStore
 import com.nikkiw.videofeedlab.feature.videofeed.impl.store.VideoFeedStoreFactory
-import com.nikkiw.videofeedlab.shared.model.VideoItem
+import com.nikkiw.videofeedlab.shared.catalog.VideoRepository
 import com.nikkiw.videofeedlab.shared.mvikotlin.asValue
 
 class DefaultVideoFeedComponent(
     componentContext: ComponentContext,
-    private val items: List<VideoItem>,
+    storeFactory: StoreFactory,
+    repository: VideoRepository,
 ) : VideoFeedComponent, ComponentContext by componentContext {
     private val store =
         instanceKeeper.getStore {
             VideoFeedStoreFactory(
-                storeFactory = DefaultStoreFactory(),
-                items = items,
+                storeFactory = storeFactory,
+                repository = repository,
             ).create()
         }
 
@@ -34,6 +35,7 @@ class DefaultVideoFeedComponent(
                     isMuted = value.isMuted,
                     isPlaying = value.isPlaying,
                     debugState = value.debugState,
+                    catalogLoadState = value.catalogLoadState,
                 )
             }
 
@@ -51,5 +53,9 @@ class DefaultVideoFeedComponent(
 
     override fun onTogglePlay() {
         store.accept(VideoFeedStore.Intent.TogglePlay)
+    }
+
+    override fun onRetryLoad() {
+        store.accept(VideoFeedStore.Intent.RetryLoad)
     }
 }

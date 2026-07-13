@@ -28,4 +28,5 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(libs.compose.foundation)
     implementation(libs.compose.ui)
+    implementation(libs.koin.core)
 }

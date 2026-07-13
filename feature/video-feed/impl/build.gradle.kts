@@ -16,6 +16,7 @@ kotlin {
             implementation(libs.mvikotlin.main)
             implementation(libs.mvikotlin.coroutines)
             implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.koin.core)
         }
 
         androidMain.dependencies {
@@ -30,6 +31,11 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)
             implementation(libs.compose.material)
+        }
+
+        desktopTest.dependencies {
+            implementation(libs.koin.test)
+            implementation(libs.ktor.client.core)
         }
     }
 }

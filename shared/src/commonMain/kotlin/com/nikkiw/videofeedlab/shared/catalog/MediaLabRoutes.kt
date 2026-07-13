@@ -23,10 +23,36 @@ data class MediaLabEnvironment(
 class MediaLabUrlResolver(
     private val environment: MediaLabEnvironment,
 ) {
+    fun origin(profile: MediaLabNetworkProfile): String = "http://${environment.host}:${profile.port}"
+
     fun resolve(
-        relativeUrl: String,
+        url: String,
         profile: MediaLabNetworkProfile,
-    ): String = "http://${environment.host}:${profile.port}/${relativeUrl.trimStart('/')}"
+        baseUrl: String = "",
+    ): String =
+        when {
+            url.isAbsoluteHttpUrl() -> url
+            baseUrl.isAbsoluteHttpUrl() -> baseUrl.resolveRelativeUrl(url)
+            else -> {
+                val path = "${baseUrl.trimEnd('/')}/${url.trimStart('/')}"
+                "${origin(profile)}/${path.trimStart('/')}"
+            }
+        }
+
+    private fun String.isAbsoluteHttpUrl(): Boolean = startsWith("http://") || startsWith("https://")
+
+    private fun String.httpOrigin(): String {
+        val authorityStart = indexOf("://") + 3
+        val pathStart = indexOf('/', startIndex = authorityStart)
+        return if (pathStart == -1) this else substring(0, pathStart)
+    }
+
+    private fun String.resolveRelativeUrl(relativeUrl: String): String =
+        if (relativeUrl.startsWith('/')) {
+            "${httpOrigin()}$relativeUrl"
+        } else {
+            "${trimEnd('/')}/$relativeUrl"
+        }
 }
 
 class VideoFeedLabRoutes(

@@ -38,6 +38,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":shared"))
     implementation(project(":feature:video-feed:api"))
     implementation(project(":feature:video-feed:impl"))
     implementation(libs.decompose)
@@ -46,5 +47,6 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.material)
     implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.koin.android)
     debugImplementation(libs.compose.ui.tooling)
 }
