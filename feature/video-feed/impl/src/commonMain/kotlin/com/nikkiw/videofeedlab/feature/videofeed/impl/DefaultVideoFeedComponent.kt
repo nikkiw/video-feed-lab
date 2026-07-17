@@ -5,6 +5,7 @@ import com.arkivanov.decompose.value.Value
 import com.arkivanov.decompose.value.operator.map
 import com.arkivanov.mvikotlin.core.instancekeeper.getStore
 import com.arkivanov.mvikotlin.core.store.StoreFactory
+import com.nikkiw.videofeedlab.feature.videofeed.api.FeedLaunchParams
 import com.nikkiw.videofeedlab.feature.videofeed.api.PlaybackDebugState
 import com.nikkiw.videofeedlab.feature.videofeed.api.VideoFeedComponent
 import com.nikkiw.videofeedlab.feature.videofeed.impl.store.VideoFeedStore
@@ -16,6 +17,7 @@ class DefaultVideoFeedComponent(
     componentContext: ComponentContext,
     storeFactory: StoreFactory,
     repository: VideoRepository,
+    launchParams: FeedLaunchParams,
 ) : VideoFeedComponent, ComponentContext by componentContext {
     private val store =
         instanceKeeper.getStore {
@@ -36,6 +38,7 @@ class DefaultVideoFeedComponent(
                     isPlaying = value.isPlaying,
                     debugState = value.debugState,
                     catalogLoadState = value.catalogLoadState,
+                    presentationId = launchParams.presentationId,
                 )
             }
 

@@ -12,7 +12,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.arkivanov.decompose.ComponentContext
+import com.nikkiw.videofeedlab.feature.videofeed.api.FeedLaunchParams
+import com.nikkiw.videofeedlab.feature.videofeed.api.FeedPresentationId
 import com.nikkiw.videofeedlab.feature.videofeed.api.VideoFeedEntry
+import com.nikkiw.videofeedlab.feature.videofeed.api.VideoFeedEntryFactory
 
 /**
  * Desktop application root.
@@ -22,9 +26,11 @@ import com.nikkiw.videofeedlab.feature.videofeed.api.VideoFeedEntry
  * can replace this state holder with a Decompose ChildStack without changing Home contracts.
  */
 internal class DesktopAppRoot(
-    private val videoFeedEntry: VideoFeedEntry,
+    private val componentContext: ComponentContext,
+    private val videoFeedEntryFactory: VideoFeedEntryFactory,
 ) {
     private var destination by mutableStateOf<Destination>(Destination.Home)
+    private var activeFeedEntry by mutableStateOf<VideoFeedEntry?>(null)
 
     @Composable
     fun Content() {
@@ -46,17 +52,23 @@ internal class DesktopAppRoot(
         val presentation = DesktopFeedPresentations.find(presentationId) ?: return
         if (!presentation.isAvailable) return
 
+        activeFeedEntry =
+            videoFeedEntryFactory.create(
+                componentContext = componentContext,
+                launchParams = FeedLaunchParams(presentationId = presentationId),
+            )
         destination = Destination.Feed(presentationId)
     }
 
     private fun showHome() {
+        activeFeedEntry = null
         destination = Destination.Home
     }
 
     @Composable
     private fun FeedDestination(onBack: () -> Unit) {
         Box(modifier = Modifier.fillMaxSize()) {
-            videoFeedEntry.Content()
+            checkNotNull(activeFeedEntry).Content()
 
             Button(
                 onClick = onBack,
