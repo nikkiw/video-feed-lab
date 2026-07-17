@@ -1,6 +1,5 @@
 package com.nikkiw.videofeedlab.feature.videofeed.impl.playback.player
 
-import android.content.Context
 import androidx.annotation.OptIn
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
@@ -132,7 +131,6 @@ internal interface PlayerPool {
 @OptIn(UnstableApi::class)
 internal class Media3FeedPlayerFactory(
     private val builder: DefaultPreloadManager.Builder,
-    private val context: Context,
     private val policy: PlaybackPolicy,
 ) : FeedPlayerFactory {
     override fun create(): ExoPlayer =
@@ -141,7 +139,7 @@ internal class Media3FeedPlayerFactory(
             trackSelectionParameters =
                 trackSelectionParameters
                     .buildUpon()
-                    .setViewportSizeToPhysicalDisplaySize(context, true)
+                    .setViewportSizeToPhysicalDisplaySize(true)
                     .setMaxVideoSize(policy.maxVideoWidth, policy.maxVideoHeight)
                     .build()
         }
