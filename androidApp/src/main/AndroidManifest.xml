@@ -5,6 +5,7 @@
     <application
         android:name=".VideoFeedLabApplication"
         android:allowBackup="true"
+        android:enableOnBackInvokedCallback="true"
         android:label="Video Feed Lab"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="false">
