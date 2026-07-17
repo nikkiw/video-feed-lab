@@ -27,6 +27,8 @@ dependencies {
     implementation(project(":feature:video-feed:impl"))
     implementation(compose.desktop.currentOs)
     implementation(libs.compose.foundation)
+    implementation(compose.material3)
+    implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.compose.ui)
     implementation(libs.koin.core)
 }

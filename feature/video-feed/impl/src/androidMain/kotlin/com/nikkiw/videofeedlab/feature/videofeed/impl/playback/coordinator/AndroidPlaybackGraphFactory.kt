@@ -6,7 +6,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.preload.DefaultPreloadManager
 import com.nikkiw.videofeedlab.feature.videofeed.api.PlaybackDebugState
 import com.nikkiw.videofeedlab.feature.videofeed.impl.playback.cache.CacheManager
@@ -43,10 +42,10 @@ internal class AndroidPlaybackGraphFactory(
                 ).build()
         val builder =
             DefaultPreloadManager.Builder(context.applicationContext, statusControl)
-                .setMediaSourceFactory(DefaultMediaSourceFactory(CacheManager.getCacheDataSourceFactory(context)))
+                .setDataSourceFactory(CacheManager.getCacheDataSourceFactory(context))
                 .setLoadControl(loadControl)
         val preloader = Media3FeedPreloader(builder.build(), statusControl, mediaItems, policy)
-        val playerFactory = Media3FeedPlayerFactory(builder, context, policy)
+        val playerFactory = Media3FeedPlayerFactory(builder, policy)
         val pool = Media3PlayerPool(playerFactory, policy.playerCount, preloader)
         val session = PlaybackSessionState(items)
         val metrics =
