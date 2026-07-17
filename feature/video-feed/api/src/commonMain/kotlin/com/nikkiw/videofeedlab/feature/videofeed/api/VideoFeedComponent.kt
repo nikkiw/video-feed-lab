@@ -7,6 +7,7 @@ interface VideoFeedComponent {
     val models: Value<Model>
 
     data class Model(
+        val presentationId: FeedPresentationId,
         val items: List<VideoItem>,
         val activeIndex: Int,
         val isMuted: Boolean,

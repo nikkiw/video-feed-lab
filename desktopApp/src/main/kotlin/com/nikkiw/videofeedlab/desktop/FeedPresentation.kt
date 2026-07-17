@@ -1,9 +1,7 @@
 package com.nikkiw.videofeedlab.desktop
 
-@JvmInline
-internal value class FeedPresentationId(
-    val value: String,
-)
+import com.nikkiw.videofeedlab.feature.videofeed.api.FeedPresentationId
+import com.nikkiw.videofeedlab.feature.videofeed.api.FeedPresentations
 
 internal enum class FeedPresentationStatus {
     Stable,
@@ -20,8 +18,8 @@ internal data class FeedPresentationDescriptor(
 )
 
 internal object DesktopFeedPresentations {
-    val VerticalSnap = FeedPresentationId("vertical-snap")
-    val HorizontalPageTurn = FeedPresentationId("horizontal-page-turn")
+    val VerticalSnap = FeedPresentations.VerticalSnap
+    val HorizontalPageTurn = FeedPresentations.HorizontalPageTurn
 
     val all: List<FeedPresentationDescriptor> =
         listOf(

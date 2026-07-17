@@ -21,10 +21,10 @@ fun main() {
     val videoFeedEntryFactory = koinApplication.koin.get<VideoFeedEntryFactory>()
     val lifecycle = LifecycleRegistry()
     val rootContext = DefaultComponentContext(lifecycle = lifecycle)
-    val videoFeedEntry = videoFeedEntryFactory.create(rootContext)
     val appRoot =
         DesktopAppRoot(
-            videoFeedEntry = videoFeedEntry,
+            componentContext = rootContext,
+            videoFeedEntryFactory = videoFeedEntryFactory,
         )
 
     try {
