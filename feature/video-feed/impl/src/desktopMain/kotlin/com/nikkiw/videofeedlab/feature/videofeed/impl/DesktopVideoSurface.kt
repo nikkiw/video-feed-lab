@@ -1,0 +1,61 @@
+package com.nikkiw.videofeedlab.feature.videofeed.impl
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.awt.SwingPanel
+import java.awt.BorderLayout
+import java.awt.Component
+import java.awt.event.MouseWheelListener
+import javax.swing.JPanel
+import androidx.compose.ui.graphics.Color as ComposeColor
+import java.awt.Color as AwtColor
+
+@Composable
+internal fun DesktopVideoSurface(
+    coordinator: DesktopPlaybackCoordinator,
+    surfaceId: Int,
+    onWheel: (Double) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val videoComponent = coordinator.videoComponent(surfaceId) ?: return
+    val currentOnWheel = rememberUpdatedState(onWheel)
+    val wheelListener =
+        remember(videoComponent) {
+            MouseWheelListener { event ->
+                currentOnWheel.value(event.preciseWheelRotation)
+                event.consume()
+            }
+        }
+
+    DisposableEffect(videoComponent, wheelListener) {
+        videoComponent.addMouseWheelListener(wheelListener)
+        onDispose { videoComponent.removeMouseWheelListener(wheelListener) }
+    }
+
+    SwingPanel(
+        modifier = modifier,
+        background = ComposeColor.Black,
+        factory = {
+            JPanel(BorderLayout()).apply {
+                background = AwtColor.BLACK
+                isOpaque = true
+                attach(videoComponent)
+            }
+        },
+        update = { host -> host.attach(videoComponent) },
+    )
+}
+
+private fun JPanel.attach(videoComponent: Component) {
+    val alreadyAttached = componentCount == 1 && getComponent(0) === videoComponent
+    if (alreadyAttached) return
+
+    videoComponent.parent?.remove(videoComponent)
+    removeAll()
+    add(videoComponent, BorderLayout.CENTER)
+    revalidate()
+    repaint()
+}

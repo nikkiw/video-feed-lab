@@ -16,12 +16,12 @@ class DefaultVideoFeedEntry(
     private val launchParams: FeedLaunchParams,
 ) : VideoFeedEntry {
     @Composable
-    override fun Content() {
+    override fun Content(onBack: (() -> Unit)?) {
         val component =
             remember(componentContext, launchParams) {
                 DefaultVideoFeedComponent(componentContext, storeFactory, repository, launchParams)
             }
-        PlatformVideoFeedScreen(component = component)
+        PlatformVideoFeedScreen(component = component, onBack = onBack)
     }
 }
 

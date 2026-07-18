@@ -4,5 +4,5 @@ import androidx.compose.runtime.Composable
 
 interface VideoFeedEntry {
     @Composable
-    fun Content()
+    fun Content(onBack: (() -> Unit)?)
 }

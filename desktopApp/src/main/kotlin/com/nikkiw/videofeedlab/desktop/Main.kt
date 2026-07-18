@@ -14,6 +14,9 @@ import org.koin.core.context.startKoin
  * The entry point for the desktop application.
  */
 fun main() {
+    // Allow Compose posters and loading indicators to render above LibVLC Swing surfaces.
+    System.setProperty("compose.interop.blending", "true")
+
     val koinApplication =
         startKoin {
             modules(catalogModule, videoFeedModule)
