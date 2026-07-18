@@ -35,6 +35,7 @@ import kotlinx.coroutines.launch
 internal fun DesktopVideoFeedContent(
     component: VideoFeedComponent,
     model: VideoFeedComponent.Model,
+    onBack: (() -> Unit)?,
 ) {
     val coordinatorResult = remember(model.items) { DesktopPlaybackCoordinator.create(model.items) }
     val coordinator = coordinatorResult.getOrNull()
@@ -95,6 +96,7 @@ internal fun DesktopVideoFeedContent(
                 component.onTogglePlay()
             },
             onToggleMuted = component::onToggleMute,
+            onBack = onBack,
         )
 
         VerticalPager(
@@ -127,6 +129,7 @@ private fun DesktopToolbar(
     onNext: () -> Unit,
     onTogglePlay: () -> Unit,
     onToggleMuted: () -> Unit,
+    onBack: (() -> Unit)?,
 ) {
     Row(
         modifier =
@@ -137,6 +140,11 @@ private fun DesktopToolbar(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (onBack != null) {
+            Button(onClick = onBack) {
+                Text("Back")
+            }
+        }
         Text("Video Feed Lab", color = Color.White)
         Button(onClick = onPrevious, enabled = activeIndex > 0) { Text("Previous") }
         Button(onClick = onTogglePlay) { Text(if (playback.isPlaying) "Pause" else "Play") }

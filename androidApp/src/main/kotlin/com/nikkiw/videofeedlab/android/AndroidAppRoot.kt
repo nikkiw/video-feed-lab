@@ -2,16 +2,11 @@ package com.nikkiw.videofeedlab.android
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.Button
-import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.ComponentContext
 import com.arkivanov.essenty.backhandler.BackCallback
 import com.nikkiw.videofeedlab.feature.videofeed.api.FeedLaunchParams
@@ -77,17 +72,7 @@ internal class AndroidAppRoot(
     @Composable
     private fun FeedDestination(onBack: () -> Unit) {
         Box(modifier = Modifier.fillMaxSize()) {
-            checkNotNull(activeFeedEntry).Content()
-
-            Button(
-                onClick = onBack,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp),
-            ) {
-                Text("Back to feed modes")
-            }
+            checkNotNull(activeFeedEntry).Content(onBack = onBack)
         }
     }
 

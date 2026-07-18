@@ -76,10 +76,13 @@ private data class VideoPageUi(
 )
 
 @Composable
-internal actual fun PlatformVideoFeedScreen(component: VideoFeedComponent) {
+internal actual fun PlatformVideoFeedScreen(
+    component: VideoFeedComponent,
+    onBack: (() -> Unit)?,
+) {
     val model by component.models.subscribeAsState()
     when (val loadState = model.catalogLoadState) {
-        CatalogLoadState.Content -> VideoFeedContent(component, model)
+        CatalogLoadState.Content -> VideoFeedContent(component, model, onBack)
         CatalogLoadState.Loading -> CatalogStatusScreen(message = "Loading video catalog…", showProgress = true)
         CatalogLoadState.Empty -> CatalogStatusScreen(message = "No videos found")
         is CatalogLoadState.Error -> CatalogStatusScreen(message = loadState.message, onRetry = component::onRetryLoad)
@@ -90,6 +93,7 @@ internal actual fun PlatformVideoFeedScreen(component: VideoFeedComponent) {
 private fun VideoFeedContent(
     component: VideoFeedComponent,
     model: VideoFeedComponent.Model,
+    onBack: (() -> Unit)?,
 ) {
     val context = LocalContext.current
     val coordinator =
@@ -163,6 +167,18 @@ private fun VideoFeedContent(
                     .align(Alignment.TopStart)
                     .padding(12.dp),
         )
+
+        if (onBack != null) {
+            Button(
+                onClick = onBack,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp),
+            ) {
+                Text("Back to feed modes")
+            }
+        }
     }
 }
 

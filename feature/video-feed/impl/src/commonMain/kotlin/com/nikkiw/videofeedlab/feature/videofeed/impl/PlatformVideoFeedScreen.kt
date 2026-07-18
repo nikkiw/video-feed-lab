@@ -4,4 +4,7 @@ import androidx.compose.runtime.Composable
 import com.nikkiw.videofeedlab.feature.videofeed.api.VideoFeedComponent
 
 @Composable
-internal expect fun PlatformVideoFeedScreen(component: VideoFeedComponent)
+internal expect fun PlatformVideoFeedScreen(
+    component: VideoFeedComponent,
+    onBack: (() -> Unit)? = null,
+)

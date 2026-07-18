@@ -1,9 +1,6 @@
 package com.nikkiw.videofeedlab.feature.videofeed.impl
 
 import com.nikkiw.videofeedlab.shared.model.VideoItem
-import java.awt.Component
-import java.awt.Dimension
-import javax.swing.SwingUtilities
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,6 +8,9 @@ import kotlinx.coroutines.flow.update
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
 import uk.co.caprica.vlcj.player.component.CallbackMediaPlayerComponent
+import java.awt.Component
+import java.awt.Dimension
+import javax.swing.SwingUtilities
 
 /**
  * Screen-scoped desktop player that reuses one native LibVLC pipeline for the entire feed.
