@@ -24,7 +24,7 @@ internal fun DesktopPosterImage(
     fallbackUrl: String,
     modifier: Modifier = Modifier,
 ) {
-    val bitmap by produceState<ImageBitmap?>(null, loader, posterUrl, fallbackUrl) {
+    val bitmap by produceState(loader.cached(fallbackUrl), loader, posterUrl, fallbackUrl) {
         value = loader.load(posterUrl, fallbackUrl)
     }
     bitmap?.let { image ->
@@ -53,6 +53,8 @@ internal class DesktopPosterLoader : AutoCloseable {
         listOf(posterUrl, fallbackUrl)
             .distinct()
             .firstNotNullOfOrNull { url -> load(url) }
+
+    fun cached(url: String): ImageBitmap? = synchronized(cache) { cache[url] }
 
     override fun close() {
         client.close()
