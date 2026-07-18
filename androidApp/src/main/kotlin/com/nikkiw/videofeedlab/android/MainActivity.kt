@@ -13,9 +13,10 @@ class MainActivity : ComponentActivity(), KoinComponent {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val videoFeedEntry = videoFeedEntryFactory.create(defaultComponentContext())
+        val rootContext = defaultComponentContext()
+        val appRoot = AndroidAppRoot(rootContext, videoFeedEntryFactory)
         setContent {
-            videoFeedEntry.Content()
+            appRoot.Content()
         }
     }
 }
