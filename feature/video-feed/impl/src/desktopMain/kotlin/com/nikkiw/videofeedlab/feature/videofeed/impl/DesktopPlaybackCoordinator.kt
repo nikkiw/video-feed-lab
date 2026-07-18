@@ -11,10 +11,8 @@ import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
 import uk.co.caprica.vlcj.player.component.CallbackMediaPlayerComponent
 import uk.co.caprica.vlcj.player.embedded.EmbeddedMediaPlayer
-import java.awt.Canvas
 import java.awt.Component
 import java.awt.Dimension
-import java.awt.event.HierarchyListener
 import javax.swing.SwingUtilities
 
 /** Screen-scoped two-slot LibVLC pool backed by one native LibVLC instance. */
@@ -401,18 +399,25 @@ internal class DesktopPlaybackCoordinator private constructor(
                 factory = createdFactory
                 val slots =
                     List(PLAYER_COUNT) { id ->
-                        val component = CallbackMediaPlayerComponent(
-                            createdFactory,
-                            null,
-                            null,
-                            true,
-                            null
-                        ).apply {
-                            minimumSize = Dimension(1, 1)
-                            preferredSize = Dimension(DEFAULT_VIDEO_WIDTH, DEFAULT_VIDEO_HEIGHT)
-                        }
+                        val component =
+                            CallbackMediaPlayerComponent(
+                                createdFactory,
+                                null,
+                                null,
+                                true,
+                                null,
+                            ).apply {
+                                minimumSize = Dimension(1, 1)
+                                preferredSize = Dimension(DEFAULT_VIDEO_WIDTH, DEFAULT_VIDEO_HEIGHT)
+                            }
                         val player = component.mediaPlayer()
-                        val slot = DesktopPlayerSlot(id = id, component = component, player = player, surface = component)
+                        val slot =
+                            DesktopPlayerSlot(
+                                id = id,
+                                component = component,
+                                player = player,
+                                surface = component,
+                            )
                         component.addHierarchyListener { _ ->
                             if (component.isDisplayable) {
                                 slot.execute(slot.pendingAction)
@@ -520,8 +525,11 @@ private enum class DesktopSlotPhase {
 
 internal sealed interface PendingPlayerAction {
     object None : PendingPlayerAction
+
     data class PlayMrl(val mrl: String) : PendingPlayerAction
+
     data class StartPausedMrl(val mrl: String) : PendingPlayerAction
+
     object Resume : PendingPlayerAction
 }
 
@@ -530,14 +538,14 @@ private class DesktopPlayerSlot(
     val component: CallbackMediaPlayerComponent,
     val player: EmbeddedMediaPlayer,
     val surface: Component,
-    var assignment: DesktopSlotAssignment? = null,
-    var phase: DesktopSlotPhase = DesktopSlotPhase.EMPTY,
-    var pendingSeekMs: Long = 0L,
-    var startupStartedAtNanos: Long = 0L,
-    var firstFramePresented: Boolean = false,
-    var buffering: Boolean = false,
-    var listener: MediaPlayerEventAdapter? = null,
 ) {
+    var assignment: DesktopSlotAssignment? = null
+    var phase: DesktopSlotPhase = DesktopSlotPhase.EMPTY
+    var pendingSeekMs: Long = 0L
+    var startupStartedAtNanos: Long = 0L
+    var firstFramePresented: Boolean = false
+    var buffering: Boolean = false
+    var listener: MediaPlayerEventAdapter? = null
     var pendingAction: PendingPlayerAction = PendingPlayerAction.None
 
     fun execute(action: PendingPlayerAction) {
