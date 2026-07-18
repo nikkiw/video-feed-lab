@@ -26,7 +26,7 @@ import com.nikkiw.videofeedlab.feature.videofeed.api.VideoFeedComponent
 internal actual fun PlatformVideoFeedScreen(component: VideoFeedComponent) {
     val model by component.models.subscribeAsState()
     when (val loadState = model.catalogLoadState) {
-        CatalogLoadState.Content -> VideoFeedContent(component, model)
+        CatalogLoadState.Content -> DesktopVideoFeedContent(component, model)
         CatalogLoadState.Loading -> CatalogStatusScreen(message = "Loading video catalog…", showProgress = true)
         CatalogLoadState.Empty -> CatalogStatusScreen(message = "No videos found")
         is CatalogLoadState.Error -> CatalogStatusScreen(message = loadState.message, onRetry = component::onRetryLoad)

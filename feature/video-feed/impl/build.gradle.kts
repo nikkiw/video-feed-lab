@@ -31,6 +31,9 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)
             implementation(libs.compose.material)
+
+            // JVM wrapper; decoding and rendering are delegated to the locally installed LibVLC.
+            implementation("uk.co.caprica:vlcj:4.12.1")
         }
 
         desktopTest.dependencies {
