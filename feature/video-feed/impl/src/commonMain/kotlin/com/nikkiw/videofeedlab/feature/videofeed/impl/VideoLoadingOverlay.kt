@@ -35,11 +35,12 @@ import androidx.compose.ui.unit.dp
 internal fun VideoLoadingOverlay(
     firstFramePresented: Boolean,
     active: Boolean,
+    forcePosterVisible: Boolean = false,
     modifier: Modifier = Modifier,
     posterContent: @Composable BoxScope.() -> Unit,
 ) {
     val posterAlpha by animateFloatAsState(
-        targetValue = if (firstFramePresented) 0f else 1f,
+        targetValue = if (firstFramePresented && !forcePosterVisible) 0f else 1f,
         animationSpec = tween(durationMillis = POSTER_FADE_MILLIS),
         label = "PosterAlpha",
     )
