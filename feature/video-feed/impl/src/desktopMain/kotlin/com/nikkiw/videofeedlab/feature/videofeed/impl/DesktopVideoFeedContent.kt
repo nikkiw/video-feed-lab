@@ -11,10 +11,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.Button
-import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -46,6 +46,7 @@ internal fun DesktopVideoFeedContent(
         return
     }
 
+    val posterLoader = remember(coordinator) { DesktopPosterLoader() }
     val playback by coordinator.state.collectAsState()
     val pagerState =
         rememberPagerState(
@@ -61,27 +62,14 @@ internal fun DesktopVideoFeedContent(
         }
     }
 
-    DisposableEffect(coordinator) {
-        coordinator.setMuted(model.isMuted)
-        onDispose(coordinator::release)
-    }
-
-    LaunchedEffect(model.isMuted, coordinator) {
-        coordinator.setMuted(model.isMuted)
-    }
-
-    LaunchedEffect(pagerState.settledPage, coordinator) {
-        component.onPageSelected(pagerState.settledPage)
-        coordinator.play(pagerState.settledPage)
-    }
-
-    LaunchedEffect(pagerState.isScrollInProgress, coordinator) {
-        if (pagerState.isScrollInProgress) {
-            coordinator.onScrollStart()
-        } else {
-            coordinator.play(pagerState.settledPage)
-        }
-    }
+    DesktopPlaybackEffects(
+        component = component,
+        isMuted = model.isMuted,
+        itemIndices = model.items.indices,
+        pagerState = pagerState,
+        coordinator = coordinator,
+        posterLoader = posterLoader,
+    )
 
     Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         DesktopToolbar(
@@ -89,14 +77,17 @@ internal fun DesktopVideoFeedContent(
             itemCount = model.items.size,
             isMuted = model.isMuted,
             playback = playback,
-            onPrevious = { moveBy(-1) },
-            onNext = { moveBy(1) },
-            onTogglePlay = {
-                coordinator.togglePlayPause()
-                component.onTogglePlay()
-            },
-            onToggleMuted = component::onToggleMute,
-            onBack = onBack,
+            actions =
+                DesktopToolbarActions(
+                    onPrevious = { moveBy(-1) },
+                    onNext = { moveBy(1) },
+                    onTogglePlay = {
+                        coordinator.togglePlayPause()
+                        component.onTogglePlay()
+                    },
+                    onToggleMuted = component::onToggleMute,
+                    onBack = onBack,
+                ),
         )
 
         VerticalPager(
@@ -108,7 +99,8 @@ internal fun DesktopVideoFeedContent(
                 item = model.items[page],
                 isActive = page == pagerState.settledPage,
                 coordinator = coordinator,
-                playback = playback,
+                playback = playback.pages.getValue(page),
+                posterLoader = posterLoader,
                 onPageDelta = ::moveBy,
                 onTogglePlay = {
                     coordinator.togglePlayPause()
@@ -120,17 +112,52 @@ internal fun DesktopVideoFeedContent(
 }
 
 @Composable
+private fun DesktopPlaybackEffects(
+    component: VideoFeedComponent,
+    isMuted: Boolean,
+    itemIndices: IntRange,
+    pagerState: PagerState,
+    coordinator: DesktopPlaybackCoordinator,
+    posterLoader: DesktopPosterLoader,
+) {
+    DisposableEffect(coordinator, posterLoader) {
+        coordinator.setMuted(isMuted)
+        onDispose {
+            posterLoader.close()
+            coordinator.release()
+        }
+    }
+    LaunchedEffect(isMuted, coordinator) {
+        coordinator.setMuted(isMuted)
+    }
+    LaunchedEffect(pagerState.settledPage, coordinator) {
+        component.onPageSelected(pagerState.settledPage)
+        coordinator.play(pagerState.settledPage)
+    }
+    LaunchedEffect(pagerState.isScrollInProgress, coordinator) {
+        if (pagerState.isScrollInProgress) {
+            coordinator.onScrollStart()
+        } else {
+            coordinator.play(pagerState.settledPage)
+        }
+    }
+    LaunchedEffect(pagerState.targetPage, coordinator) {
+        val targetPage = pagerState.targetPage
+        if (targetPage != pagerState.settledPage && targetPage in itemIndices) {
+            coordinator.preloadPage(targetPage)
+        }
+    }
+}
+
+@Composable
 private fun DesktopToolbar(
     activeIndex: Int,
     itemCount: Int,
     isMuted: Boolean,
     playback: DesktopPlaybackState,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-    onTogglePlay: () -> Unit,
-    onToggleMuted: () -> Unit,
-    onBack: (() -> Unit)?,
+    actions: DesktopToolbarActions,
 ) {
+    val activePlayback = playback.activePage
     Row(
         modifier =
             Modifier
@@ -140,40 +167,60 @@ private fun DesktopToolbar(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (onBack != null) {
-            Button(onClick = onBack) {
+        if (actions.onBack != null) {
+            Button(onClick = actions.onBack) {
                 Text("Back")
             }
         }
         Text("Video Feed Lab", color = Color.White)
-        Button(onClick = onPrevious, enabled = activeIndex > 0) { Text("Previous") }
-        Button(onClick = onTogglePlay) { Text(if (playback.isPlaying) "Pause" else "Play") }
-        Button(onClick = onNext, enabled = activeIndex < itemCount - 1) { Text("Next") }
-        Button(onClick = onToggleMuted) { Text(if (isMuted) "Unmute" else "Mute") }
+        Button(onClick = actions.onPrevious, enabled = activeIndex > 0) { Text("Previous") }
+        Button(onClick = actions.onTogglePlay) {
+            Text(if (activePlayback?.isPlaying == true) "Pause" else "Play")
+        }
+        Button(onClick = actions.onNext, enabled = activeIndex < itemCount - 1) { Text("Next") }
+        Button(onClick = actions.onToggleMuted) { Text(if (isMuted) "Unmute" else "Mute") }
         Spacer(modifier = Modifier.weight(1f))
 
-        val status =
-            when {
-                playback.errorMessage != null -> "error"
-                playback.isBuffering -> "buffering"
-                playback.isPlaying -> "playing"
-                else -> "paused"
+        val status = activePlayback.statusLabel()
+        val source =
+            when (activePlayback?.startupSource) {
+                DesktopStartupSource.STANDBY -> "standby-ready"
+                DesktopStartupSource.COLD -> "cold-start"
+                null -> null
             }
         Text(
             text =
                 "${activeIndex + 1}/$itemCount · $status" +
-                    (playback.startupTimeMs?.let { " · start ${it}ms" } ?: ""),
+                    (source?.let { " · $it" } ?: "") +
+                    (activePlayback?.startupTimeMs?.let { " · start ${it}ms" } ?: ""),
             color = Color.LightGray,
         )
     }
 }
+
+private fun DesktopPagePlaybackState?.statusLabel(): String =
+    when {
+        this?.errorMessage != null -> "error"
+        this?.isBuffering == true -> "buffering"
+        this?.isPlaying == true -> "playing"
+        else -> "paused"
+    }
+
+private data class DesktopToolbarActions(
+    val onPrevious: () -> Unit,
+    val onNext: () -> Unit,
+    val onTogglePlay: () -> Unit,
+    val onToggleMuted: () -> Unit,
+    val onBack: (() -> Unit)?,
+)
 
 @Composable
 private fun DesktopFeedPage(
     item: VideoItem,
     isActive: Boolean,
     coordinator: DesktopPlaybackCoordinator,
-    playback: DesktopPlaybackState,
+    playback: DesktopPagePlaybackState,
+    posterLoader: DesktopPosterLoader,
     onPageDelta: (Int) -> Unit,
     onTogglePlay: () -> Unit,
 ) {
@@ -182,16 +229,25 @@ private fun DesktopFeedPage(
             modifier = Modifier.fillMaxWidth().weight(1f),
             contentAlignment = Alignment.Center,
         ) {
-            if (isActive) {
+            playback.surfaceId?.let { surfaceId ->
                 DesktopVideoSurface(
                     coordinator = coordinator,
+                    surfaceId = surfaceId,
                     onPageDelta = onPageDelta,
                     modifier = Modifier.fillMaxSize(),
                 )
-                if (playback.isBuffering && !playback.firstFrameRendered) {
-                    CircularProgressIndicator(color = Color.White)
-                }
             }
+            VideoLoadingOverlay(
+                firstFramePresented = playback.firstFramePresented,
+                active = isActive,
+            ) {
+                DesktopPosterImage(
+                    loader = posterLoader,
+                    posterUrl = playback.posterUrl,
+                    fallbackUrl = item.images.posterUrl,
+                )
+            }
+
         }
 
         Column(
