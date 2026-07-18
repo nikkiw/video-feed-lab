@@ -17,16 +17,16 @@ import java.awt.Color as AwtColor
 internal fun DesktopVideoSurface(
     coordinator: DesktopPlaybackCoordinator,
     surfaceId: Int,
-    onPageDelta: (Int) -> Unit,
+    onWheel: (Double) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val videoComponent = coordinator.videoComponent(surfaceId) ?: return
-    val currentOnPageDelta = rememberUpdatedState(onPageDelta)
+    val currentOnWheel = rememberUpdatedState(onWheel)
     val wheelListener =
         remember(videoComponent) {
             MouseWheelListener { event ->
-                val delta = event.wheelRotation.compareTo(0)
-                if (delta != 0) currentOnPageDelta.value(delta)
+                currentOnWheel.value(event.preciseWheelRotation)
+                event.consume()
             }
         }
 

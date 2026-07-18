@@ -22,14 +22,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.nikkiw.videofeedlab.feature.videofeed.api.VideoFeedComponent
 import com.nikkiw.videofeedlab.shared.model.VideoItem
-import kotlinx.coroutines.launch
 
 @Composable
 internal fun DesktopVideoFeedContent(
@@ -53,14 +51,12 @@ internal fun DesktopVideoFeedContent(
             initialPage = model.activeIndex.coerceIn(0, model.items.lastIndex),
             pageCount = { model.items.size },
         )
-    val scope = rememberCoroutineScope()
-
-    fun moveBy(delta: Int) {
-        val target = (pagerState.settledPage + delta).coerceIn(model.items.indices)
-        if (target != pagerState.settledPage) {
-            scope.launch { pagerState.animateScrollToPage(target) }
-        }
-    }
+    val navigation =
+        rememberDesktopPagerNavigation(
+            pagerState = pagerState,
+            itemIndices = model.items.indices,
+            onTargetPage = coordinator::preloadPage,
+        )
 
     DesktopPlaybackEffects(
         component = component,
@@ -79,8 +75,8 @@ internal fun DesktopVideoFeedContent(
             playback = playback,
             actions =
                 DesktopToolbarActions(
-                    onPrevious = { moveBy(-1) },
-                    onNext = { moveBy(1) },
+                    onPrevious = { navigation.moveBy(-1) },
+                    onNext = { navigation.moveBy(1) },
                     onTogglePlay = {
                         coordinator.togglePlayPause()
                         component.onTogglePlay()
@@ -96,16 +92,23 @@ internal fun DesktopVideoFeedContent(
             beyondViewportPageCount = 1,
         ) { page ->
             DesktopFeedPage(
-                item = model.items[page],
-                isActive = page == pagerState.settledPage,
+                ui =
+                    DesktopFeedPageUi(
+                        item = model.items[page],
+                        isActive = page == pagerState.settledPage,
+                        isScrolling = pagerState.isScrollInProgress,
+                        playback = playback.pages.getValue(page),
+                    ),
                 coordinator = coordinator,
-                playback = playback.pages.getValue(page),
                 posterLoader = posterLoader,
-                onPageDelta = ::moveBy,
-                onTogglePlay = {
-                    coordinator.togglePlayPause()
-                    component.onTogglePlay()
-                },
+                actions =
+                    DesktopFeedPageActions(
+                        onWheel = navigation::onWheel,
+                        onTogglePlay = {
+                            coordinator.togglePlayPause()
+                            component.onTogglePlay()
+                        },
+                    ),
             )
         }
     }
@@ -214,40 +217,49 @@ private data class DesktopToolbarActions(
     val onBack: (() -> Unit)?,
 )
 
+private data class DesktopFeedPageUi(
+    val item: VideoItem,
+    val isActive: Boolean,
+    val isScrolling: Boolean,
+    val playback: DesktopPagePlaybackState,
+)
+
+private data class DesktopFeedPageActions(
+    val onWheel: (Double) -> Unit,
+    val onTogglePlay: () -> Unit,
+)
+
 @Composable
 private fun DesktopFeedPage(
-    item: VideoItem,
-    isActive: Boolean,
+    ui: DesktopFeedPageUi,
     coordinator: DesktopPlaybackCoordinator,
-    playback: DesktopPagePlaybackState,
     posterLoader: DesktopPosterLoader,
-    onPageDelta: (Int) -> Unit,
-    onTogglePlay: () -> Unit,
+    actions: DesktopFeedPageActions,
 ) {
     Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         Box(
             modifier = Modifier.fillMaxWidth().weight(1f),
             contentAlignment = Alignment.Center,
         ) {
-            playback.surfaceId?.let { surfaceId ->
+            ui.playback.surfaceId?.let { surfaceId ->
                 DesktopVideoSurface(
                     coordinator = coordinator,
                     surfaceId = surfaceId,
-                    onPageDelta = onPageDelta,
+                    onWheel = actions.onWheel,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
             VideoLoadingOverlay(
-                firstFramePresented = playback.firstFramePresented,
-                active = isActive,
+                firstFramePresented = ui.playback.firstFramePresented,
+                active = ui.isActive,
+                forcePosterVisible = ui.isScrolling,
             ) {
                 DesktopPosterImage(
                     loader = posterLoader,
-                    posterUrl = playback.posterUrl,
-                    fallbackUrl = item.images.posterUrl,
+                    posterUrl = ui.playback.posterUrl,
+                    fallbackUrl = ui.item.images.posterUrl,
                 )
             }
-
         }
 
         Column(
@@ -255,23 +267,23 @@ private fun DesktopFeedPage(
                 Modifier
                     .fillMaxWidth()
                     .background(Color(0xFF16161A))
-                    .clickable(onClick = onTogglePlay)
+                    .clickable(onClick = actions.onTogglePlay)
                     .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(text = item.title, color = Color.White)
-            Text(text = item.subtitle, color = Color.LightGray)
+            Text(text = ui.item.title, color = Color.White)
+            Text(text = ui.item.subtitle, color = Color.LightGray)
             Text(
                 text =
-                    item.source.streamType.name +
-                        if (isActive && playback.rebufferCount > 0) {
-                            " · rebuffers ${playback.rebufferCount}"
+                    ui.item.source.streamType.name +
+                        if (ui.isActive && ui.playback.rebufferCount > 0) {
+                            " · rebuffers ${ui.playback.rebufferCount}"
                         } else {
                             ""
                         },
                 color = Color.Gray,
             )
-            playback.errorMessage?.takeIf { isActive }?.let { message ->
+            ui.playback.errorMessage?.takeIf { ui.isActive }?.let { message ->
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(text = message, color = Color(0xFFFF8A80))
             }

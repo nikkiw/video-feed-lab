@@ -24,4 +24,23 @@ class DesktopPlaybackPolicyTest {
         assertEquals(4, preferredAdjacentIndex(5, DesktopScrollDirection.FORWARD, lastIndex = 5))
         assertNull(preferredAdjacentIndex(0, DesktopScrollDirection.INITIAL, lastIndex = 0))
     }
+
+    @Test
+    fun convertsWheelRotationToBoundedDrag() {
+        assertEquals(0.22f, wheelDragProgress(1.0), absoluteTolerance = 0.001f)
+        assertEquals(-0.22f, wheelDragProgress(-1.0), absoluteTolerance = 0.001f)
+        assertEquals(0.9f, wheelDragProgress(20.0), absoluteTolerance = 0.001f)
+        assertEquals(-0.9f, wheelDragProgress(-20.0), absoluteTolerance = 0.001f)
+    }
+
+    @Test
+    fun snapsWheelGestureToOneAdjacentPage() {
+        val indices = 0..5
+
+        assertEquals(3, wheelTargetPage(startPage = 2, totalRotation = 1.0, indices))
+        assertEquals(1, wheelTargetPage(startPage = 2, totalRotation = -1.0, indices))
+        assertEquals(0, wheelTargetPage(startPage = 0, totalRotation = -1.0, indices))
+        assertEquals(5, wheelTargetPage(startPage = 5, totalRotation = 1.0, indices))
+        assertEquals(2, wheelTargetPage(startPage = 2, totalRotation = 0.01, indices))
+    }
 }

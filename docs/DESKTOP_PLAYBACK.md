@@ -25,7 +25,7 @@ application.
 
 ## Interaction
 
-- mouse wheel over the video: previous or next page;
+- mouse wheel or trackpad over the video: continuously drag the feed, then snap to the adjacent page;
 - `Previous` and `Next`: explicit page navigation;
 - click the metadata panel or use `Play`/`Pause`: toggle playback;
 - `Mute`/`Unmute`: update both shared feed state and the native player.
