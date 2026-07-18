@@ -1,6 +1,8 @@
 package com.nikkiw.videofeedlab.feature.videofeed.impl
 
+import java.awt.image.BufferedImage
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
@@ -42,5 +44,15 @@ class DesktopPlaybackPolicyTest {
         assertEquals(0, wheelTargetPage(startPage = 0, totalRotation = -1.0, indices))
         assertEquals(5, wheelTargetPage(startPage = 5, totalRotation = 1.0, indices))
         assertEquals(2, wheelTargetPage(startPage = 2, totalRotation = 0.01, indices))
+    }
+
+    @Test
+    fun convertsCapturedAwtPixelsFromArgbToBgra() {
+        val source = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
+        source.setRGB(0, 0, 0x7F123456)
+
+        val pixels = source.toBgraBytes()
+
+        assertContentEquals(byteArrayOf(0x56, 0x34, 0x12, 0x7F), pixels)
     }
 }

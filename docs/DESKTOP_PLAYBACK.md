@@ -30,10 +30,12 @@ application.
 - click the metadata panel or use `Play`/`Pause`: toggle playback;
 - `Mute`/`Unmute`: update both shared feed state and the native player.
 
-Playback pauses while the pager is moving. The old surface keeps its last frame, while the target
-page shows a poster and the shared animated loader until its first playback frame is presented. A
-previously visited page requests a time-based thumbnail at its saved position and falls back to the
-regular poster when it is unavailable.
+Playback pauses while the pager is moving. The native VLC surfaces stay mounted in a fixed layer;
+the pager moves a Compose snapshot of the old frame and a poster for the target page instead of
+moving `SwingPanel` instances. If frame capture is unavailable, the old page also falls back to its
+poster. The shared animated loader remains visible on the settled target until its first playback
+frame is presented. A previously visited page requests a time-based thumbnail at its saved position
+and falls back to the regular poster when it is unavailable.
 
 The pager's `targetPage` prepares the standby slot before settling. On settle, a prepared standby
 is promoted without reopening its media URL; the old active slot is then reused to preload the next

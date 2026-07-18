@@ -1,5 +1,6 @@
 package com.nikkiw.videofeedlab.feature.videofeed.impl
 
+import androidx.compose.ui.graphics.ImageBitmap
 import com.nikkiw.videofeedlab.shared.model.VideoItem
 import com.nikkiw.videofeedlab.shared.model.thumbnailUrlAt
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +39,7 @@ internal class DesktopPlaybackCoordinator private constructor(
     private var currentIndex = NO_ACTIVE_INDEX
     private var generation = 0L
     private var muted = false
+    private var scrolling = false
     private var released = false
 
     init {
@@ -48,6 +50,8 @@ internal class DesktopPlaybackCoordinator private constructor(
 
     fun play(index: Int) {
         if (released || index !in items.indices) return
+        scrolling = false
+        mutableState.update(DesktopPlaybackState::withoutScrollFrames)
 
         val current = activeSlot
         if (index == currentIndex && current?.assignment?.index == index) {
@@ -101,7 +105,11 @@ internal class DesktopPlaybackCoordinator private constructor(
     }
 
     fun onScrollStart() {
-        if (released) return
+        if (released || scrolling) return
+        scrolling = true
+        activeSlot?.capturePresentedFrame()?.let { captured ->
+            updatePage(captured.index) { copy(scrollFrame = captured.frame) }
+        }
         saveActivePosition()
         activeSlot?.player?.controls()?.pause()
     }
@@ -461,9 +469,13 @@ internal data class DesktopPlaybackState(
         get() = pages[activeIndex]
 }
 
+private fun DesktopPlaybackState.withoutScrollFrames(): DesktopPlaybackState =
+    copy(pages = pages.mapValues { (_, page) -> page.copy(scrollFrame = null) })
+
 internal data class DesktopPagePlaybackState(
     val surfaceId: Int? = null,
     val posterUrl: String,
+    val scrollFrame: ImageBitmap? = null,
     val firstFramePresented: Boolean = false,
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
@@ -577,5 +589,25 @@ private class DesktopPlayerSlot(
         } else {
             execute(PendingPlayerAction.Resume)
         }
+    }
+}
+
+private data class CapturedDesktopFrame(
+    val index: Int,
+    val frame: ImageBitmap,
+)
+
+private fun DesktopPlayerSlot.capturePresentedFrame(): CapturedDesktopFrame? {
+    val currentAssignment = assignment
+    val frame =
+        if (firstFramePresented && currentAssignment != null) {
+            captureComponentFrame(component.videoSurfaceComponent())
+        } else {
+            null
+        }
+    return if (currentAssignment != null && frame != null) {
+        CapturedDesktopFrame(index = currentAssignment.index, frame = frame)
+    } else {
+        null
     }
 }

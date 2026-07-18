@@ -1,9 +1,11 @@
 package com.nikkiw.videofeedlab.feature.videofeed.impl
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -21,10 +24,12 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.nikkiw.videofeedlab.feature.videofeed.api.VideoFeedComponent
 import com.nikkiw.videofeedlab.shared.model.VideoItem
@@ -55,6 +60,7 @@ internal fun DesktopVideoFeedContent(
         rememberDesktopPagerNavigation(
             pagerState = pagerState,
             itemIndices = model.items.indices,
+            onScrollStart = coordinator::onScrollStart,
             onTargetPage = coordinator::preloadPage,
         )
 
@@ -86,32 +92,62 @@ internal fun DesktopVideoFeedContent(
                 ),
         )
 
-        VerticalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize().weight(1f),
-            beyondViewportPageCount = 1,
-        ) { page ->
-            DesktopFeedPage(
-                ui =
-                    DesktopFeedPageUi(
-                        item = model.items[page],
-                        isActive = page == pagerState.settledPage,
-                        isScrolling = pagerState.isScrollInProgress,
-                        playback = playback.pages.getValue(page),
-                    ),
+        Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+            DesktopFixedVideoSurfaces(
+                playback = playback,
                 coordinator = coordinator,
-                posterLoader = posterLoader,
-                actions =
-                    DesktopFeedPageActions(
-                        onWheel = navigation::onWheel,
-                        onTogglePlay = {
-                            coordinator.togglePlayPause()
-                            component.onTogglePlay()
-                        },
-                    ),
+                onWheel = navigation::onWheel,
             )
+            VerticalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                beyondViewportPageCount = 1,
+            ) { page ->
+                DesktopFeedPage(
+                    ui =
+                        DesktopFeedPageUi(
+                            item = model.items[page],
+                            isActive = page == pagerState.settledPage,
+                            isScrolling = pagerState.isScrollInProgress,
+                            playback = playback.pages.getValue(page),
+                        ),
+                    posterLoader = posterLoader,
+                    onTogglePlay = {
+                        coordinator.togglePlayPause()
+                        component.onTogglePlay()
+                    },
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun BoxScope.DesktopFixedVideoSurfaces(
+    playback: DesktopPlaybackState,
+    coordinator: DesktopPlaybackCoordinator,
+    onWheel: (Double) -> Unit,
+) {
+    val activeSurfaceId = playback.activePage?.surfaceId
+    playback.pages.values
+        .mapNotNull(DesktopPagePlaybackState::surfaceId)
+        .distinct()
+        .forEach { surfaceId ->
+            key(surfaceId) {
+                val isActive = surfaceId == activeSurfaceId
+                DesktopVideoSurface(
+                    coordinator = coordinator,
+                    surfaceId = surfaceId,
+                    onWheel = if (isActive) onWheel else IGNORE_WHEEL,
+                    modifier =
+                        if (isActive) {
+                            Modifier.fillMaxSize().padding(bottom = DESKTOP_METADATA_HEIGHT)
+                        } else {
+                            Modifier.size(1.dp).align(Alignment.TopStart)
+                        },
+                )
+            }
+        }
 }
 
 @Composable
@@ -224,35 +260,29 @@ private data class DesktopFeedPageUi(
     val playback: DesktopPagePlaybackState,
 )
 
-private data class DesktopFeedPageActions(
-    val onWheel: (Double) -> Unit,
-    val onTogglePlay: () -> Unit,
-)
-
 @Composable
 private fun DesktopFeedPage(
     ui: DesktopFeedPageUi,
-    coordinator: DesktopPlaybackCoordinator,
     posterLoader: DesktopPosterLoader,
-    actions: DesktopFeedPageActions,
+    onTogglePlay: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Column(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier.fillMaxWidth().weight(1f),
             contentAlignment = Alignment.Center,
         ) {
-            ui.playback.surfaceId?.let { surfaceId ->
-                DesktopVideoSurface(
-                    coordinator = coordinator,
-                    surfaceId = surfaceId,
-                    onWheel = actions.onWheel,
+            ui.playback.scrollFrame?.takeIf { ui.isScrolling }?.let { frame ->
+                Image(
+                    bitmap = frame,
+                    contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
                 )
             }
             VideoLoadingOverlay(
                 firstFramePresented = ui.playback.firstFramePresented,
                 active = ui.isActive,
-                forcePosterVisible = ui.isScrolling,
+                forcePosterVisible = ui.isScrolling && ui.playback.scrollFrame == null,
             ) {
                 DesktopPosterImage(
                     loader = posterLoader,
@@ -266,8 +296,9 @@ private fun DesktopFeedPage(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .height(DESKTOP_METADATA_HEIGHT)
                     .background(Color(0xFF16161A))
-                    .clickable(onClick = actions.onTogglePlay)
+                    .clickable(onClick = onTogglePlay)
                     .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -290,6 +321,9 @@ private fun DesktopFeedPage(
         }
     }
 }
+
+private val IGNORE_WHEEL: (Double) -> Unit = {}
+private val DESKTOP_METADATA_HEIGHT = 104.dp
 
 @Composable
 private fun DesktopPlaybackUnavailable(message: String) {

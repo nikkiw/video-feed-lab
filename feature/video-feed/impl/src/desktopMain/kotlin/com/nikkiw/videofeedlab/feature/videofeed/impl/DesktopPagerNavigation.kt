@@ -19,6 +19,7 @@ internal class DesktopPagerNavigation(
     private val pagerState: PagerState,
     private val itemIndices: IntRange,
     private val scope: CoroutineScope,
+    private val onScrollStart: () -> Unit,
     private val onTargetPage: (Int) -> Unit,
 ) {
     private val wheelEvents = Channel<Double>(capacity = Channel.UNLIMITED)
@@ -26,6 +27,7 @@ internal class DesktopPagerNavigation(
     fun moveBy(delta: Int) {
         val target = (pagerState.settledPage + delta).coerceIn(itemIndices)
         if (target != pagerState.settledPage) {
+            onScrollStart()
             onTargetPage(target)
             scope.launch {
                 pagerState.animateScrollToPage(
@@ -50,6 +52,7 @@ internal class DesktopPagerNavigation(
             var totalRotation = 0.0
             var appliedProgress = 0f
 
+            onScrollStart()
             pagerState.scroll(MutatePriority.UserInput) {
                 var rotation: Double? = firstRotation
                 while (rotation != null) {
@@ -80,9 +83,11 @@ internal class DesktopPagerNavigation(
 internal fun rememberDesktopPagerNavigation(
     pagerState: PagerState,
     itemIndices: IntRange,
+    onScrollStart: () -> Unit,
     onTargetPage: (Int) -> Unit,
 ): DesktopPagerNavigation {
     val scope = rememberCoroutineScope()
+    val currentOnScrollStart = rememberUpdatedState(onScrollStart)
     val currentOnTargetPage = rememberUpdatedState(onTargetPage)
     val navigation =
         remember(pagerState, itemIndices) {
@@ -90,6 +95,7 @@ internal fun rememberDesktopPagerNavigation(
                 pagerState = pagerState,
                 itemIndices = itemIndices,
                 scope = scope,
+                onScrollStart = { currentOnScrollStart.value() },
                 onTargetPage = { currentOnTargetPage.value(it) },
             )
         }

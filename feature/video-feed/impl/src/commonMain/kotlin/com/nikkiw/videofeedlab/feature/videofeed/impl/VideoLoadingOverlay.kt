@@ -39,11 +39,12 @@ internal fun VideoLoadingOverlay(
     modifier: Modifier = Modifier,
     posterContent: @Composable BoxScope.() -> Unit,
 ) {
-    val posterAlpha by animateFloatAsState(
+    val animatedPosterAlpha by animateFloatAsState(
         targetValue = if (firstFramePresented && !forcePosterVisible) 0f else 1f,
         animationSpec = tween(durationMillis = POSTER_FADE_MILLIS),
         label = "PosterAlpha",
     )
+    val posterAlpha = if (forcePosterVisible) 1f else animatedPosterAlpha
     if (posterAlpha <= 0f) return
 
     Box(
