@@ -7,6 +7,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
 import java.awt.BorderLayout
+import java.awt.Component
 import java.awt.event.MouseWheelListener
 import javax.swing.JPanel
 import androidx.compose.ui.graphics.Color as ComposeColor
@@ -15,25 +16,23 @@ import java.awt.Color as AwtColor
 @Composable
 internal fun DesktopVideoSurface(
     coordinator: DesktopPlaybackCoordinator,
+    surfaceId: Int,
     onPageDelta: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val videoComponent = coordinator.videoComponent(surfaceId) ?: return
     val currentOnPageDelta = rememberUpdatedState(onPageDelta)
     val wheelListener =
-        remember(coordinator) {
+        remember(videoComponent) {
             MouseWheelListener { event ->
                 val delta = event.wheelRotation.compareTo(0)
-                if (delta != 0) {
-                    currentOnPageDelta.value(delta)
-                }
+                if (delta != 0) currentOnPageDelta.value(delta)
             }
         }
 
-    DisposableEffect(coordinator, wheelListener) {
-        coordinator.videoComponent.addMouseWheelListener(wheelListener)
-        onDispose {
-            coordinator.videoComponent.removeMouseWheelListener(wheelListener)
-        }
+    DisposableEffect(videoComponent, wheelListener) {
+        videoComponent.addMouseWheelListener(wheelListener)
+        onDispose { videoComponent.removeMouseWheelListener(wheelListener) }
     }
 
     SwingPanel(
@@ -43,15 +42,14 @@ internal fun DesktopVideoSurface(
             JPanel(BorderLayout()).apply {
                 background = AwtColor.BLACK
                 isOpaque = true
-                attach(coordinator)
+                attach(videoComponent)
             }
         },
-        update = { host -> host.attach(coordinator) },
+        update = { host -> host.attach(videoComponent) },
     )
 }
 
-private fun JPanel.attach(coordinator: DesktopPlaybackCoordinator) {
-    val videoComponent = coordinator.videoComponent
+private fun JPanel.attach(videoComponent: Component) {
     val alreadyAttached = componentCount == 1 && getComponent(0) === videoComponent
     if (alreadyAttached) return
 

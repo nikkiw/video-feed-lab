@@ -25,7 +25,7 @@ The project is based on the structure of `nikkiw/kmp-modular-template`: Android 
   - current bitrate;
   - current resolution;
   - playing state.
-- Desktop target remains buildable and shows the catalog, while Media3 playback stays platform-specific.
+- Desktop short-video feed backed by two reusable LibVLC players from one shared factory.
 
 ## Architecture
 
@@ -44,7 +44,9 @@ feature:video-feed:impl
       ├─ ExoPlayer
       └─ QoE metrics
    desktopMain
-      └─ diagnostic placeholder
+      ├─ VerticalPager
+      ├─ two-slot LibVLC player pool
+      └─ target-page preload and poster loading
         ↓
 shared
    ├─ VideoItem
