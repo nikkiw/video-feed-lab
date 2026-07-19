@@ -183,6 +183,7 @@ internal fun DesktopPlaybackCoordinator.queueAdjacentPreload(
     centerIndex: Int,
     direction: DesktopScrollDirection,
 ) {
+    assertEventLoopThread()
     if (!config.sourceMode.supportsStandbyPreload) {
         pendingPreloadIndex = null
         return
@@ -198,6 +199,7 @@ internal fun DesktopPlaybackCoordinator.queueAdjacentPreload(
 }
 
 internal fun DesktopPlaybackCoordinator.startPendingPreloadIfEligible() {
+    assertEventLoopThread()
     val index = getEligiblePendingPreloadIndex()
     if (index != null) {
         val standby = slots.firstOrNull { it !== activeSlot }

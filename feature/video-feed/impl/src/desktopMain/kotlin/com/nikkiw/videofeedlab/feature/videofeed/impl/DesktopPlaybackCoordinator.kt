@@ -63,11 +63,8 @@ internal class DesktopPlaybackCoordinator private constructor(
     }
 
     fun preloadPage(index: Int) {
-        if (released || index !in items.indices || index == currentIndex) return
-        if (!config.sourceMode.supportsStandbyPreload) return
-
-        pendingPreloadIndex = index
-        startPendingPreloadIfEligible()
+        if (index !in items.indices || releaseRequested.get()) return
+        eventLoop.dispatch { queueTargetPreloadOnEventLoop(index) }
     }
 
     fun onScrollStart() {
@@ -185,18 +182,20 @@ internal class DesktopPlaybackCoordinator private constructor(
         queueAdjacentPreload(index, direction)
     }
 
-    internal fun preloadPageOnEventLoop(index: Int) {
+    private fun queueTargetPreloadOnEventLoop(index: Int) {
         assertEventLoopThread()
-        if (released || releaseRequested.get()) return
-        if (index !in items.indices || index == currentIndex) return
-        val existing = slotAssignedTo(index)
-        val alreadyPrepared =
-            existing != null && existing !== activeSlot && existing.phase != DesktopSlotPhase.FAILED
-        if (!alreadyPrepared) {
-            slots.firstOrNull { it !== activeSlot }?.let { standby ->
-                assign(standby, index, startPaused = true)
-            }
-        }
+        val shouldQueue =
+            shouldQueueTargetPreload(
+                requestedIndex = index,
+                currentIndex = currentIndex,
+                lastIndex = items.lastIndex,
+                releaseRequested = released || releaseRequested.get(),
+                supportsStandbyPreload = config.sourceMode.supportsStandbyPreload,
+            )
+        if (!shouldQueue) return
+
+        pendingPreloadIndex = index
+        startPendingPreloadIfEligible()
     }
 
     private fun onScrollStartOnEventLoop() {
@@ -313,6 +312,18 @@ internal class DesktopPlaybackCoordinator private constructor(
         private const val DEFAULT_VIDEO_HEIGHT = 960
     }
 }
+
+internal fun shouldQueueTargetPreload(
+    requestedIndex: Int,
+    currentIndex: Int,
+    lastIndex: Int,
+    releaseRequested: Boolean,
+    supportsStandbyPreload: Boolean,
+): Boolean =
+    !releaseRequested &&
+        supportsStandbyPreload &&
+        requestedIndex in 0..lastIndex &&
+        requestedIndex != currentIndex
 
 internal const val BUFFER_COMPLETE_PERCENT = 100f
 internal const val NANOS_PER_MILLISECOND = 1_000_000L
