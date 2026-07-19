@@ -56,6 +56,7 @@ internal class DesktopPlayerSlot(
 
     var pendingSeekMs: Long = 0L
     var presentationBaselineMs: Long = 0L
+    var preloadEligibilityBaselineMs: Long = 0L
     var startupStartedAtNanos: Long = 0L
     var frameReady: Boolean = false
     var preloadStartedAtNanos: Long = 0L

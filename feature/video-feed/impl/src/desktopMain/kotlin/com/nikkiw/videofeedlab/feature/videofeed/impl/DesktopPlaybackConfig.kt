@@ -12,8 +12,13 @@ internal data class DesktopPlaybackConfig(
     val standbyNetworkCachingMs: Int = DEFAULT_STANDBY_NETWORK_CACHING_MS,
     val standbyLiveCachingMs: Int = DEFAULT_STANDBY_LIVE_CACHING_MS,
     val fileCachingMs: Int = DEFAULT_FILE_CACHING_MS,
+    val sourceMode: DesktopSourceMode = DesktopSourceMode.COMPATIBILITY_PROGRESSIVE,
+    val activeStablePlaybackMs: Long = DEFAULT_ACTIVE_STABLE_PLAYBACK_MS,
 ) {
     init {
+        require(activeStablePlaybackMs >= 0L) {
+            "activeStablePlaybackMs must not be negative"
+        }
         require(networkCachingMs >= 0) {
             "networkCachingMs must not be negative"
         }
@@ -48,6 +53,8 @@ internal data class DesktopPlaybackConfig(
     }
 
     private companion object {
+        const val DEFAULT_ACTIVE_STABLE_PLAYBACK_MS = 750L
+
         /*
          * 600 ms exposed a repeatable underrun about one second after startup
          * for Media Lab DASH/LTE playback. 800 ms gives a safe margin above that

@@ -54,3 +54,39 @@ VLC requirement or bundle the correct native runtime for each OS and CPU archite
 
 vlcj is available under GPL-3.0-or-later or a commercial license. Review the intended distribution
 model before shipping a binary from this MIT-licensed laboratory project.
+
+## Desktop source compatibility policy
+
+LibVLC 3.x on desktop can restart the adaptive fMP4 demux between HLS/DASH
+fragments (`Fragment sequence discontinuity` followed by `needrestart`). In the
+feed this appears as playback starting normally, freezing after roughly one or
+two seconds, and then continuing after the decoder is recreated.
+
+For that reason Desktop uses **progressive MP4 compatibility mode by default**.
+The host and network-profile port selected by the catalog are preserved, while
+known `/vfl/media/<asset>/hls/master.m3u8` and
+`/vfl/media/<asset>/dash/manifest.mpd` routes are rewritten to
+`/vfl/media/<asset>/progressive`.
+
+Android is unchanged and continues to exercise HLS/DASH through Media3.
+
+To reproduce and diagnose the native LibVLC adaptive behavior explicitly:
+
+```bash
+VIDEO_FEED_LAB_DESKTOP_SOURCE_MODE=adaptive ./gradlew :desktopApp:run
+```
+
+Adaptive desktop mode uses the original catalog URL and disables the standby
+player preload. A decoded first frame is not treated as proof that the next
+adaptive fragment can continue without a demux restart.
+
+In progressive mode the standby player starts only after the active player:
+
+1. has presented a frame;
+2. is not buffering;
+3. has played continuously for at least 750 ms.
+
+If active playback enters rebuffering while standby warmup is running, standby
+is stopped and retried only after active playback becomes stable again. Active
+uninterrupted playback always has priority over speculative preload.
+
