@@ -2,22 +2,31 @@ package com.nikkiw.videofeedlab.feature.videofeed.impl
 
 import com.nikkiw.videofeedlab.shared.model.thumbnailUrlAt
 import kotlinx.coroutines.flow.update
-import javax.swing.SwingUtilities
 
 /**
  * Private-scope coordinator operations extracted to keep [DesktopPlaybackCoordinator]
  * within the Detekt [LargeClass] threshold.
  *
  * Validates that [mediaPlayer] still belongs to [slot]'s current assignment.
- * Returns null if the coordinator is released, the player doesn't match, or the
- * MRL has changed (e.g. during a hot-swap to a new media item).
+ * Returns null if release has started, the per-assignment listener generation is
+ * stale, the player doesn't match, or the MRL changed during a media hot-swap.
  */
 internal fun DesktopPlaybackCoordinator.validAssignment(
     slot: DesktopPlayerSlot,
     mediaPlayer: uk.co.caprica.vlcj.player.base.MediaPlayer,
+    eventGeneration: Long,
 ): DesktopSlotAssignment? {
-    if (released || slot.player !== mediaPlayer) return null
+    assertEventLoopThread()
     val current = slot.assignment
+    val isValid =
+        !released &&
+            slot.player === mediaPlayer &&
+            current != null &&
+            matchesGeneration(current, eventGeneration) &&
+            isCurrentAssignment(slot, current)
+
+    if (!isValid) return null
+
     val currentMrl = runCatching { mediaPlayer.media().info().mrl() }.getOrNull()
     return current?.takeIf { currentMrl == null || currentMrl == it.sourceUri }
 }
@@ -27,6 +36,7 @@ internal fun DesktopPlaybackCoordinator.assign(
     index: Int,
     startPaused: Boolean,
 ) {
+    assertEventLoopThread()
     val previousAssignment = slot.assignment
     if (previousAssignment?.index == currentIndex && slot === activeSlot) {
         saveActivePosition()
@@ -52,6 +62,7 @@ internal fun DesktopPlaybackCoordinator.assign(
             generation = ++generation,
         )
     slot.assignment = assignment
+    replacePlayerListener(slot, assignment.generation)
     slot.phase = DesktopSlotPhase.PREPARING
     slot.buffering = true
 
@@ -103,7 +114,13 @@ internal fun DesktopPlaybackCoordinator.assign(
      * frame. Play muted until the playback clock advances, then pause from the
      * timeChanged callback so READY means that the standby really warmed up.
      */
-    slot.execute(PendingPlayerAction.PlayMrl(assignment.sourceUri, options))
+    slot.execute(
+        PendingPlayerAction.PlayMrl(
+            mrl = assignment.sourceUri,
+            generation = assignment.generation,
+            options = options,
+        ),
+    )
 }
 
 internal fun DesktopPlaybackCoordinator.promoteReadyStandby(
@@ -155,7 +172,7 @@ internal fun DesktopPlaybackCoordinator.prepareAdjacent(
     centerIndex: Int,
     direction: DesktopScrollDirection,
 ) {
-    preferredAdjacentIndex(centerIndex, direction, items.lastIndex)?.let(::preloadPage)
+    preferredAdjacentIndex(centerIndex, direction, items.lastIndex)?.let(::preloadPageOnEventLoop)
 }
 
 internal fun DesktopPlaybackCoordinator.saveActivePosition() {
@@ -191,6 +208,7 @@ internal fun DesktopPlaybackCoordinator.updatePage(
     index: Int,
     transform: DesktopPagePlaybackState.() -> DesktopPagePlaybackState,
 ) {
+    assertEventLoopThread()
     mutableState.update { state ->
         val page = state.pages[index] ?: return@update state
         state.copy(pages = state.pages + (index to page.transform()))
@@ -201,14 +219,21 @@ internal fun DesktopPlaybackCoordinator.publish(
     assignment: DesktopSlotAssignment,
     transform: DesktopPagePlaybackState.() -> DesktopPagePlaybackState,
 ) {
-    if (released) return
-    SwingUtilities.invokeLater {
-        if (released || slotAssignedTo(assignment.index)?.assignment != assignment) return@invokeLater
-        updatePage(assignment.index, transform)
-    }
+    assertEventLoopThread()
+    if (released || slotAssignedTo(assignment.index)?.assignment != assignment) return
+    updatePage(assignment.index, transform)
 }
 
 internal fun DesktopPlaybackCoordinator.trace(
+    slot: DesktopPlayerSlot,
+    event: String,
+    details: String = "",
+) {
+    assertEventLoopThread()
+    traceFromPlayerThread(slot, event, details)
+}
+
+internal fun traceFromPlayerThread(
     slot: DesktopPlayerSlot,
     event: String,
     details: String = "",
