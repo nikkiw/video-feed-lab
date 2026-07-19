@@ -50,12 +50,13 @@ internal fun DesktopVideoFeedContent(
         )
         return
     }
-
     val posterLoader = remember(coordinator) { DesktopPosterLoader() }
     val playback by coordinator.state.collectAsState()
     LaunchedEffect(playback, model.items, component) {
         component.onPlaybackDebugStateChanged(
-            playback.toPlaybackDebugState(model.items),
+            playback.toPlaybackDebugState(
+                videoIds = model.items.map(VideoItem::id),
+            ),
         )
     }
     val pagerState =
@@ -80,27 +81,52 @@ internal fun DesktopVideoFeedContent(
         posterLoader = posterLoader,
     )
 
+    val actions =
+        remember(navigation, coordinator, component, onBack) {
+            DesktopToolbarActions(
+                onPrevious = { navigation.moveBy(-1) },
+                onNext = { navigation.moveBy(1) },
+                onTogglePlay = coordinator::togglePlayPause,
+                onToggleMuted = component::onToggleMute,
+                onBack = onBack,
+            )
+        }
+
+    DesktopVideoFeedLayout(
+        model = model,
+        pagerState = pagerState,
+        coordinator = coordinator,
+        playback = playback,
+        posterLoader = posterLoader,
+        actions = actions,
+        onWheel = navigation::onWheel,
+    )
+}
+
+@Composable
+internal fun DesktopVideoFeedLayout(
+    model: VideoFeedComponent.Model,
+    pagerState: PagerState,
+    coordinator: DesktopPlaybackCoordinator,
+    playback: DesktopPlaybackState,
+    posterLoader: DesktopPosterLoader,
+    actions: DesktopToolbarActions,
+    onWheel: (Double) -> Unit,
+) {
     Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         DesktopToolbar(
             activeIndex = pagerState.settledPage,
             itemCount = model.items.size,
             isMuted = model.isMuted,
             playback = playback,
-            actions =
-                DesktopToolbarActions(
-                    onPrevious = { navigation.moveBy(-1) },
-                    onNext = { navigation.moveBy(1) },
-                    onTogglePlay = coordinator::togglePlayPause,
-                    onToggleMuted = component::onToggleMute,
-                    onBack = onBack,
-                ),
+            actions = actions,
         )
 
         Box(modifier = Modifier.fillMaxSize().weight(1f)) {
             DesktopFixedVideoSurfaces(
                 playback = playback,
                 coordinator = coordinator,
-                onWheel = navigation::onWheel,
+                onWheel = onWheel,
             )
             VerticalPager(
                 state = pagerState,
@@ -116,7 +142,7 @@ internal fun DesktopVideoFeedContent(
                             playback = playback.pages.getValue(page),
                         ),
                     posterLoader = posterLoader,
-                    onTogglePlay = coordinator::togglePlayPause,
+                    onTogglePlay = actions.onTogglePlay,
                 )
             }
         }
@@ -124,15 +150,13 @@ internal fun DesktopVideoFeedContent(
 }
 
 @Composable
-private fun BoxScope.DesktopFixedVideoSurfaces(
+internal fun BoxScope.DesktopFixedVideoSurfaces(
     playback: DesktopPlaybackState,
     coordinator: DesktopPlaybackCoordinator,
     onWheel: (Double) -> Unit,
 ) {
     val activeSurfaceId = playback.activePage?.surfaceId
-    playback.pages.values
-        .mapNotNull(DesktopPagePlaybackState::surfaceId)
-        .distinct()
+    playback.pages.values.mapNotNull(DesktopPagePlaybackState::surfaceId).distinct()
         .forEach { surfaceId ->
             key(surfaceId) {
                 val isActive = surfaceId == activeSurfaceId
@@ -152,7 +176,7 @@ private fun BoxScope.DesktopFixedVideoSurfaces(
 }
 
 @Composable
-private fun DesktopPlaybackEffects(
+internal fun DesktopPlaybackEffects(
     component: VideoFeedComponent,
     isMuted: Boolean,
     itemIndices: IntRange,
@@ -190,7 +214,7 @@ private fun DesktopPlaybackEffects(
 }
 
 @Composable
-private fun DesktopToolbar(
+internal fun DesktopToolbar(
     activeIndex: Int,
     itemCount: Int,
     isMuted: Boolean,
@@ -200,9 +224,7 @@ private fun DesktopToolbar(
     val activePlayback = playback.activePage
     Row(
         modifier =
-            Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF101014))
+            Modifier.fillMaxWidth().background(Color(0xFF101014))
                 .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -230,15 +252,16 @@ private fun DesktopToolbar(
             }
         Text(
             text =
-                "${activeIndex + 1}/$itemCount · $status" +
-                    (source?.let { " · $it" } ?: "") +
-                    (activePlayback?.startupTimeMs?.let { " · start ${it}ms" } ?: ""),
+                "${activeIndex + 1}/$itemCount · $status" + (
+                    source?.let { " · $it" }
+                        ?: ""
+                ) + (activePlayback?.startupTimeMs?.let { " · start ${it}ms" } ?: ""),
             color = Color.LightGray,
         )
     }
 }
 
-private fun DesktopPagePlaybackState?.statusLabel(): String =
+internal fun DesktopPagePlaybackState?.statusLabel(): String =
     when {
         this?.errorMessage != null -> "error"
         this?.isBuffering == true -> "buffering"
@@ -246,7 +269,7 @@ private fun DesktopPagePlaybackState?.statusLabel(): String =
         else -> "paused"
     }
 
-private data class DesktopToolbarActions(
+internal data class DesktopToolbarActions(
     val onPrevious: () -> Unit,
     val onNext: () -> Unit,
     val onTogglePlay: () -> Unit,
@@ -254,7 +277,7 @@ private data class DesktopToolbarActions(
     val onBack: (() -> Unit)?,
 )
 
-private data class DesktopFeedPageUi(
+internal data class DesktopFeedPageUi(
     val item: VideoItem,
     val isActive: Boolean,
     val isScrolling: Boolean,
@@ -262,7 +285,7 @@ private data class DesktopFeedPageUi(
 )
 
 @Composable
-private fun DesktopFeedPage(
+internal fun DesktopFeedPage(
     ui: DesktopFeedPageUi,
     posterLoader: DesktopPosterLoader,
     onTogglePlay: () -> Unit,
@@ -295,11 +318,8 @@ private fun DesktopFeedPage(
 
         Column(
             modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(DESKTOP_METADATA_HEIGHT)
-                    .background(Color(0xFF16161A))
-                    .clickable(onClick = onTogglePlay)
+                Modifier.fillMaxWidth().height(DESKTOP_METADATA_HEIGHT)
+                    .background(Color(0xFF16161A)).clickable(onClick = onTogglePlay)
                     .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -323,11 +343,11 @@ private fun DesktopFeedPage(
     }
 }
 
-private val IGNORE_WHEEL: (Double) -> Unit = {}
-private val DESKTOP_METADATA_HEIGHT = 104.dp
+internal val IGNORE_WHEEL: (Double) -> Unit = {}
+internal val DESKTOP_METADATA_HEIGHT = 104.dp
 
 @Composable
-private fun DesktopPlaybackUnavailable(message: String) {
+internal fun DesktopPlaybackUnavailable(message: String) {
     Box(
         modifier = Modifier.fillMaxSize().background(Color.Black).padding(24.dp),
         contentAlignment = Alignment.Center,

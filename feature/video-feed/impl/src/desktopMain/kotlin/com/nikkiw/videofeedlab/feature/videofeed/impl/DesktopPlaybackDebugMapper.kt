@@ -1,7 +1,6 @@
 package com.nikkiw.videofeedlab.feature.videofeed.impl
 
 import com.nikkiw.videofeedlab.feature.videofeed.api.PlaybackDebugState
-import com.nikkiw.videofeedlab.shared.model.VideoItem
 
 /**
  * Maps the actual LibVLC-backed state to the platform-neutral feature state.
@@ -9,11 +8,11 @@ import com.nikkiw.videofeedlab.shared.model.VideoItem
  * Aggregate startup percentiles are intentionally not calculated here because
  * DesktopPagePlaybackState stores only the latest startup sample per page.
  */
-internal fun DesktopPlaybackState.toPlaybackDebugState(items: List<VideoItem>): PlaybackDebugState {
+internal fun DesktopPlaybackState.toPlaybackDebugState(videoIds: List<String>): PlaybackDebugState {
     val activePage = activePage
 
     return PlaybackDebugState(
-        videoId = items.getOrNull(activeIndex)?.id,
+        videoId = videoIds.getOrNull(activeIndex),
         startupTimeMs = activePage?.startupTimeMs,
         rebufferCount = activePage?.rebufferCount ?: 0,
         isPlaying = activePage?.isPlaying == true,
