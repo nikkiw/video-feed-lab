@@ -29,9 +29,9 @@ internal data class DesktopPlaybackConfig(
             ":network-caching=$cachingMs",
             ":live-caching=$cachingMs",
             ":file-caching=$fileCachingMs",
-            // NOTE: Native loop avoids the 1-2s decoder teardown delay, but visually 
-            // jerks sharply to the beginning. The ultimate solution is to implement a 
-            // local HTTP caching proxy to save network segments to disk and serve them 
+            // NOTE: Native loop avoids the 1-2s decoder teardown delay, but visually
+            // jerks sharply to the beginning. The ultimate solution is to implement a
+            // local HTTP caching proxy to save network segments to disk and serve them
             // instantly, achieving parity with ExoPlayer's SimpleCache.
             ":input-repeat=65535",
             ":no-video-title-show",
