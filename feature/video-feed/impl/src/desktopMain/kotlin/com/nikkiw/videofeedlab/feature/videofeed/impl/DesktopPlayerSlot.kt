@@ -61,25 +61,26 @@ internal class DesktopPlayerSlot(
                     player.submit {
                         val currentAssignment = assignment
                         if (currentAssignment?.sourceUri == action.mrl) {
-                            val startedAtNanos = System.nanoTime()
-                            println(
+                            val startedAtNanos =
+                                if (DesktopPlaybackTrace.enabled) System.nanoTime() else 0L
+                            DesktopPlaybackTrace.log {
                                 "[DesktopPlayback] time=${System.currentTimeMillis()} " +
                                     "slot=$id index=${currentAssignment.index} " +
                                     "generation=${currentAssignment.generation} " +
-                                    "phase=$phase event=media-play-start",
-                            )
+                                    "phase=$phase event=media-play-start"
+                            }
                             player.media().play(
                                 action.mrl,
                                 *action.options,
                             )
-                            val durationMs =
-                                (System.nanoTime() - startedAtNanos) / 1_000_000L
-                            println(
+                            DesktopPlaybackTrace.log {
+                                val durationMs =
+                                    (System.nanoTime() - startedAtNanos) / NANOS_PER_MILLISECOND
                                 "[DesktopPlayback] time=${System.currentTimeMillis()} " +
                                     "slot=$id index=${currentAssignment.index} " +
                                     "generation=${currentAssignment.generation} " +
-                                    "phase=$phase event=media-play-return durationMs=$durationMs",
-                            )
+                                    "phase=$phase event=media-play-return durationMs=$durationMs"
+                            }
                         }
                     }
                 }

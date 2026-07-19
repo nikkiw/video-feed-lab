@@ -215,9 +215,9 @@ internal fun DesktopPlaybackCoordinator.trace(
 ) {
     val assignment = slot.assignment
     val suffix = details.takeIf(String::isNotEmpty)?.let { " $it" }.orEmpty()
-    println(
+    DesktopPlaybackTrace.log {
         "[DesktopPlayback] time=${System.currentTimeMillis()} " +
             "slot=${slot.id} index=${assignment?.index} generation=${assignment?.generation} " +
-            "phase=${slot.phase} event=$event$suffix",
-    )
+            "phase=${slot.phase} event=$event$suffix"
+    }
 }
