@@ -64,9 +64,18 @@ internal actual fun PlatformVideoFeedScreen(
     val model by component.models.subscribeAsState()
     when (val loadState = model.catalogLoadState) {
         CatalogLoadState.Content -> VideoFeedContent(component, model, onBack)
-        CatalogLoadState.Loading -> CatalogStatusScreen(message = "Loading video catalog…", showProgress = true)
+        CatalogLoadState.Loading ->
+            CatalogStatusScreen(
+                message = "Loading video catalog…",
+                showProgress = true,
+            )
+
         CatalogLoadState.Empty -> CatalogStatusScreen(message = "No videos found")
-        is CatalogLoadState.Error -> CatalogStatusScreen(message = loadState.message, onRetry = component::onRetryLoad)
+        is CatalogLoadState.Error ->
+            CatalogStatusScreen(
+                message = loadState.message,
+                onRetry = component::onRetryLoad,
+            )
     }
 }
 
@@ -78,12 +87,10 @@ private fun VideoFeedContent(
 ) {
     val context = LocalContext.current
     val coordinator =
-        remember(model.items) {
+        remember(model.items, component) {
             AndroidPlaybackGraphFactory(context).create(
                 items = model.items,
-                onDebugState = { debug ->
-                    (component as? DefaultVideoFeedComponent)?.updateDebugInfo(debug)
-                },
+                onDebugState = component::onPlaybackDebugStateChanged,
             )
         }
 
@@ -131,10 +138,7 @@ private fun VideoFeedContent(
                         active = page == pagerState.settledPage,
                         page = page,
                     ),
-                onTogglePlay = {
-                    coordinator.togglePlayPause()
-                    component.onTogglePlay()
-                },
+                onTogglePlay = coordinator::togglePlayPause,
                 coordinator = coordinator,
             )
         }
@@ -305,7 +309,10 @@ private fun DebugOverlay(
         Text(text = "ENTERPRISE ANALYTICS", color = Color.Green)
         Text(text = "starts: ${state.videoStarts}", color = Color.White)
         Text(text = "median (p50): ${state.p50StartupTimeMs} ms", color = Color.White)
-        Text(text = "p95: ${state.p95StartupTimeMs} ms (n=${state.sampleCount})", color = Color.White)
+        Text(
+            text = "p95: ${state.p95StartupTimeMs} ms (n=${state.sampleCount})",
+            color = Color.White,
+        )
         Text(text = "rebuffers: ${state.totalRebuffers}", color = Color.White)
         Text(text = "errors: ${state.totalErrors}", color = Color.White)
         Text(text = "dropped: ${state.totalDroppedFrames}", color = Color.White)

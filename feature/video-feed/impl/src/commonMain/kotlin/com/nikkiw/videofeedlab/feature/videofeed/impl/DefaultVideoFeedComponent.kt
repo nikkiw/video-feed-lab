@@ -36,16 +36,12 @@ class DefaultVideoFeedComponent(
                     items = value.items,
                     activeIndex = value.activeIndex,
                     isMuted = value.isMuted,
-                    isPlaying = value.isPlaying,
+                    isPlaying = value.debugState.isPlaying,
                     debugState = value.debugState,
                     catalogLoadState = value.catalogLoadState,
                     presentationId = launchParams.presentationId,
                 )
             }
-
-    fun updateDebugInfo(debugState: PlaybackDebugState) {
-        store.accept(VideoFeedStore.Intent.UpdateDebugState(debugState))
-    }
 
     override fun onPageSelected(index: Int) {
         store.accept(VideoFeedStore.Intent.SelectPage(index))
@@ -55,8 +51,8 @@ class DefaultVideoFeedComponent(
         store.accept(VideoFeedStore.Intent.ToggleMute)
     }
 
-    override fun onTogglePlay() {
-        store.accept(VideoFeedStore.Intent.TogglePlay)
+    override fun onPlaybackDebugStateChanged(debugState: PlaybackDebugState) {
+        store.accept(VideoFeedStore.Intent.UpdateDebugState(debugState))
     }
 
     override fun onRetryLoad() {
