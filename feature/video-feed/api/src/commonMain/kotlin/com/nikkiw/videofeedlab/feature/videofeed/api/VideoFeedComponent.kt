@@ -20,7 +20,7 @@ interface VideoFeedComponent {
 
     fun onToggleMute()
 
-    fun onTogglePlay()
+    fun onPlaybackDebugStateChanged(debugState: PlaybackDebugState)
 
     fun onRetryLoad()
 }

@@ -44,13 +44,20 @@ internal fun DesktopVideoFeedContent(
     val coordinator = coordinatorResult.getOrNull()
     if (coordinator == null) {
         DesktopPlaybackUnavailable(
-            message = coordinatorResult.exceptionOrNull()?.message ?: "Desktop playback is unavailable",
+            message =
+                coordinatorResult.exceptionOrNull()?.message
+                    ?: "Desktop playback is unavailable",
         )
         return
     }
 
     val posterLoader = remember(coordinator) { DesktopPosterLoader() }
     val playback by coordinator.state.collectAsState()
+    LaunchedEffect(playback, model.items, component) {
+        component.onPlaybackDebugStateChanged(
+            playback.toPlaybackDebugState(model.items),
+        )
+    }
     val pagerState =
         rememberPagerState(
             initialPage = model.activeIndex.coerceIn(0, model.items.lastIndex),
@@ -83,10 +90,7 @@ internal fun DesktopVideoFeedContent(
                 DesktopToolbarActions(
                     onPrevious = { navigation.moveBy(-1) },
                     onNext = { navigation.moveBy(1) },
-                    onTogglePlay = {
-                        coordinator.togglePlayPause()
-                        component.onTogglePlay()
-                    },
+                    onTogglePlay = coordinator::togglePlayPause,
                     onToggleMuted = component::onToggleMute,
                     onBack = onBack,
                 ),
@@ -112,10 +116,7 @@ internal fun DesktopVideoFeedContent(
                             playback = playback.pages.getValue(page),
                         ),
                     posterLoader = posterLoader,
-                    onTogglePlay = {
-                        coordinator.togglePlayPause()
-                        component.onTogglePlay()
-                    },
+                    onTogglePlay = coordinator::togglePlayPause,
                 )
             }
         }

@@ -47,8 +47,6 @@ class VideoFeedStoreFactory(
 
         object MuteToggled : Msg
 
-        object PlayToggled : Msg
-
         data class DebugStateUpdated(val debugState: PlaybackDebugState) : Msg
     }
 
@@ -67,7 +65,6 @@ class VideoFeedStoreFactory(
             when (intent) {
                 is VideoFeedStore.Intent.SelectPage -> dispatch(Msg.PageChanged(intent.index))
                 VideoFeedStore.Intent.ToggleMute -> dispatch(Msg.MuteToggled)
-                VideoFeedStore.Intent.TogglePlay -> dispatch(Msg.PlayToggled)
                 is VideoFeedStore.Intent.UpdateDebugState -> dispatch(Msg.DebugStateUpdated(intent.debugState))
                 VideoFeedStore.Intent.RetryLoad -> loadCatalog(forceRefresh = true)
             }
@@ -129,7 +126,6 @@ class VideoFeedStoreFactory(
                     }
 
                 Msg.MuteToggled -> copy(isMuted = !isMuted)
-                Msg.PlayToggled -> copy(isPlaying = !isPlaying)
                 is Msg.DebugStateUpdated -> copy(debugState = msg.debugState)
             }
     }

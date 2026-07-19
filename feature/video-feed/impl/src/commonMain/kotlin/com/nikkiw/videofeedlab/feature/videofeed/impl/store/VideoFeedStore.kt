@@ -11,8 +11,6 @@ interface VideoFeedStore : Store<VideoFeedStore.Intent, VideoFeedStore.State, No
 
         object ToggleMute : Intent
 
-        object TogglePlay : Intent
-
         data class UpdateDebugState(val debugState: PlaybackDebugState) : Intent
 
         data object RetryLoad : Intent
@@ -22,7 +20,6 @@ interface VideoFeedStore : Store<VideoFeedStore.Intent, VideoFeedStore.State, No
         val items: List<VideoItem> = emptyList(),
         val activeIndex: Int = 0,
         val isMuted: Boolean = true,
-        val isPlaying: Boolean = false,
         val debugState: PlaybackDebugState = PlaybackDebugState(),
         val catalogLoadState: CatalogLoadState = CatalogLoadState.Loading,
     )
