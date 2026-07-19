@@ -23,7 +23,7 @@ class DesktopPlaybackDebugMapperTest {
                         1 to
                             DesktopPagePlaybackState(
                                 posterUrl = "poster-1",
-                                firstFramePresented = true,
+                                frameReady = true,
                                 isPlaying = true,
                                 startupSource = DesktopStartupSource.STANDBY,
                                 startupTimeMs = 430L,

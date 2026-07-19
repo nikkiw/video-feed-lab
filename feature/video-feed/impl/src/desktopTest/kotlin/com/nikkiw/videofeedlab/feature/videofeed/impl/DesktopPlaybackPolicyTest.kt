@@ -28,6 +28,43 @@ class DesktopPlaybackPolicyTest {
     }
 
     @Test
+    fun promotesOnlyAReadyStandbyWithAPresentedFrame() {
+        assertEquals(
+            true,
+            canPromoteWithoutBuffering(
+                assignedIndex = 2,
+                requestedIndex = 2,
+                phase = DesktopSlotPhase.READY,
+                frameReady = true,
+            ),
+        )
+        assertEquals(
+            false,
+            canPromoteWithoutBuffering(
+                assignedIndex = 2,
+                requestedIndex = 2,
+                phase = DesktopSlotPhase.PLAYING,
+                frameReady = false,
+            ),
+        )
+    }
+
+    @Test
+    fun pausesStandbyWarmupOnlyAfterPlaybackClockAdvances() {
+        assertEquals(false, shouldPauseStandbyAfterProgress(true, playbackTimeMs = 0L))
+        assertEquals(true, shouldPauseStandbyAfterProgress(true, playbackTimeMs = 1L))
+        assertEquals(false, shouldPauseStandbyAfterProgress(false, playbackTimeMs = 500L))
+    }
+
+    @Test
+    fun presentsActiveSurfaceOnlyAfterPlaybackMovesBeyondStartupFrame() {
+        assertEquals(false, hasAdvancedForPresentation(playbackTimeMs = 0L, baselineTimeMs = 0L))
+        assertEquals(false, hasAdvancedForPresentation(playbackTimeMs = 99L, baselineTimeMs = 0L))
+        assertEquals(true, hasAdvancedForPresentation(playbackTimeMs = 100L, baselineTimeMs = 0L))
+        assertEquals(true, hasAdvancedForPresentation(playbackTimeMs = 1_100L, baselineTimeMs = 1_000L))
+    }
+
+    @Test
     fun convertsWheelRotationToBoundedDrag() {
         assertEquals(0.22f, wheelDragProgress(1.0), absoluteTolerance = 0.001f)
         assertEquals(-0.22f, wheelDragProgress(-1.0), absoluteTolerance = 0.001f)

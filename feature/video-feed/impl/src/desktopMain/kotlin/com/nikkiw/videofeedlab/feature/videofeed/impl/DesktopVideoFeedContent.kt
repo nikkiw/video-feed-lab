@@ -25,7 +25,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -155,7 +157,10 @@ internal fun BoxScope.DesktopFixedVideoSurfaces(
     coordinator: DesktopPlaybackCoordinator,
     onWheel: (Double) -> Unit,
 ) {
-    val activeSurfaceId = playback.activePage?.surfaceId
+    /* SwingPanel is rendered above Compose content on desktop. Keep the native
+     * surface offscreen until the target has a real frame, otherwise it hides the
+     * poster/loader and can expose the slot's previous video's last frame. */
+    val activeSurfaceId = playback.activePage?.takeIf { it.frameReady }?.surfaceId
     playback.pages.values.mapNotNull(DesktopPagePlaybackState::surfaceId).distinct()
         .forEach { surfaceId ->
             key(surfaceId) {
@@ -198,10 +203,12 @@ internal fun DesktopPlaybackEffects(
         component.onPageSelected(pagerState.settledPage)
         coordinator.play(pagerState.settledPage)
     }
+    var wasScrolling by remember { mutableStateOf(false) }
     LaunchedEffect(pagerState.isScrollInProgress, coordinator) {
         if (pagerState.isScrollInProgress) {
+            wasScrolling = true
             coordinator.onScrollStart()
-        } else {
+        } else if (wasScrolling) {
             coordinator.play(pagerState.settledPage)
         }
     }
@@ -246,16 +253,22 @@ internal fun DesktopToolbar(
         val status = activePlayback.statusLabel()
         val source =
             when (activePlayback?.startupSource) {
-                DesktopStartupSource.STANDBY -> "standby-ready"
+                DesktopStartupSource.STANDBY ->
+                    if (activePlayback.frameReady) {
+                        "standby-ready"
+                    } else {
+                        "standby-warming"
+                    }
+
                 DesktopStartupSource.COLD -> "cold-start"
                 null -> null
             }
         Text(
             text =
-                "${activeIndex + 1}/$itemCount · $status" + (
-                    source?.let { " · $it" }
-                        ?: ""
-                ) + (activePlayback?.startupTimeMs?.let { " · start ${it}ms" } ?: ""),
+                "${activeIndex + 1}/$itemCount · $status" +
+                    (source?.let { " · $it" } ?: "") +
+                    (activePlayback?.startupTimeMs?.let { " · start ${it}ms" } ?: "") +
+                    (activePlayback?.preloadTimeMs?.let { " · preload ${it}ms" } ?: ""),
             color = Color.LightGray,
         )
     }
@@ -304,7 +317,7 @@ internal fun DesktopFeedPage(
                 )
             }
             VideoLoadingOverlay(
-                firstFramePresented = ui.playback.firstFramePresented,
+                firstFramePresented = ui.playback.frameReady,
                 active = ui.isActive,
                 forcePosterVisible = ui.isScrolling && ui.playback.scrollFrame == null,
             ) {
