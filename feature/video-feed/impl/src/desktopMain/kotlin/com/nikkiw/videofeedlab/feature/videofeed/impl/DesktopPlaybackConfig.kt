@@ -23,24 +23,30 @@ internal data class DesktopPlaybackConfig(
         }
     }
 
-    fun mediaOptions(): Array<String> =
-        arrayOf(
-            ":network-caching=$networkCachingMs",
-            ":live-caching=$liveCachingMs",
+    fun mediaOptions(isStandby: Boolean): Array<String> {
+        val cachingMs = if (isStandby) 3000 else networkCachingMs
+        return arrayOf(
+            ":network-caching=$cachingMs",
+            ":live-caching=$cachingMs",
             ":file-caching=$fileCachingMs",
+            // NOTE: Native loop avoids the 1-2s decoder teardown delay, but visually 
+            // jerks sharply to the beginning. The ultimate solution is to implement a 
+            // local HTTP caching proxy to save network segments to disk and serve them 
+            // instantly, achieving parity with ExoPlayer's SimpleCache.
+            ":input-repeat=65535",
             ":no-video-title-show",
         )
+    }
 
     private companion object {
         /*
-         * The previous 1,200 ms policy was conservative for ordinary playback,
-         * but noticeably slow for a short-video feed.
-         *
-         * These values must later be validated against Clean/LTE/Flaky
-         * Universal Media Lab profiles.
+         * 600 ms exposed a repeatable underrun about one second after startup
+         * for Media Lab DASH/LTE playback. 800 ms gives a safe margin above that
+         * threshold while cutting ~700 ms off cold-start latency visible on
+         * HLS/CLEAN and other fast profiles.
          */
-        const val DEFAULT_NETWORK_CACHING_MS = 600
-        const val DEFAULT_LIVE_CACHING_MS = 600
+        const val DEFAULT_NETWORK_CACHING_MS = 800
+        const val DEFAULT_LIVE_CACHING_MS = 800
         const val DEFAULT_FILE_CACHING_MS = 200
     }
 }

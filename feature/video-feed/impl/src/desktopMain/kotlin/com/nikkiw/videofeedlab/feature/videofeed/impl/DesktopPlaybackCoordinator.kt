@@ -1,29 +1,24 @@
 package com.nikkiw.videofeedlab.feature.videofeed.impl
 
-import androidx.compose.ui.graphics.ImageBitmap
 import com.nikkiw.videofeedlab.shared.model.VideoItem
-import com.nikkiw.videofeedlab.shared.model.thumbnailUrlAt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
-import uk.co.caprica.vlcj.player.base.MediaPlayer
-import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
 import uk.co.caprica.vlcj.player.component.CallbackMediaPlayerComponent
-import uk.co.caprica.vlcj.player.embedded.EmbeddedMediaPlayer
 import java.awt.Component
 import java.awt.Dimension
-import javax.swing.SwingUtilities
 
 /** Screen-scoped two-slot LibVLC pool backed by one native LibVLC instance. */
 internal class DesktopPlaybackCoordinator private constructor(
-    private val items: List<VideoItem>,
+    internal val items: List<VideoItem>,
     private val factory: MediaPlayerFactory,
-    private val slots: List<DesktopPlayerSlot>,
+    internal val slots: List<DesktopPlayerSlot>,
+    internal val config: DesktopPlaybackConfig,
 ) {
-    private val savedPositionsMs = mutableMapOf<String, Long>()
-    private val mutableState =
+    internal val savedPositionsMs = mutableMapOf<String, Long>()
+    internal val mutableState =
         MutableStateFlow(
             DesktopPlaybackState(
                 pages =
@@ -35,12 +30,12 @@ internal class DesktopPlaybackCoordinator private constructor(
 
     val state: StateFlow<DesktopPlaybackState> = mutableState.asStateFlow()
 
-    private var activeSlot: DesktopPlayerSlot? = null
-    private var currentIndex = NO_ACTIVE_INDEX
-    private var generation = 0L
-    private var muted = false
-    private var scrolling = false
-    private var released = false
+    internal var activeSlot: DesktopPlayerSlot? = null
+    internal var currentIndex = NO_ACTIVE_INDEX
+    internal var generation = 0L
+    internal var muted = false
+    internal var scrolling = false
+    internal var released = false
 
     init {
         slots.forEach(::addPlayerListener)
@@ -66,6 +61,7 @@ internal class DesktopPlaybackCoordinator private constructor(
         val target = slotAssignedTo(index) ?: slotForNewAssignment()
 
         activeSlot?.takeUnless { it === target }?.let { old ->
+            trace(old, "pause-command", "reason=switch-active")
             old.player.controls().pause()
             old.player.audio().setMute(true)
         }
@@ -73,21 +69,43 @@ internal class DesktopPlaybackCoordinator private constructor(
         activeSlot = target
         mutableState.update { it.copy(activeIndex = index) }
 
-        val wasPrepared =
-            target.assignment?.index == index && target.phase != DesktopSlotPhase.FAILED
-        if (!wasPrepared) {
-            assign(target, index, startPaused = false)
-        } else {
-            target.startupStartedAtNanos = System.nanoTime()
-            updatePage(index) {
-                copy(
-                    isBuffering = !frameReady,
-                    errorMessage = null,
-                    startupSource = DesktopStartupSource.STANDBY,
+        val assignedToTarget =
+            target.assignment?.index == index &&
+                target.phase != DesktopSlotPhase.FAILED
+
+        val readyForInstantPromotion =
+            canPromoteWithoutBuffering(
+                assignedIndex = target.assignment?.index,
+                requestedIndex = index,
+                phase = target.phase,
+                frameReady = target.frameReady,
+            )
+
+        when {
+            !assignedToTarget -> {
+                trace(target, "promote-cold", "requested=$index")
+                assign(
+                    slot = target,
+                    index = index,
+                    startPaused = false,
                 )
             }
-            target.player.audio().setMute(muted)
-            target.executeResume()
+
+            readyForInstantPromotion -> {
+                trace(target, "promote-ready", "requested=$index")
+                promoteReadyStandby(
+                    slot = target,
+                    index = index,
+                )
+            }
+
+            else -> {
+                trace(target, "promote-warming", "requested=$index")
+                promoteWarmingStandby(
+                    slot = target,
+                    index = index,
+                )
+            }
         }
 
         prepareAdjacent(index, direction)
@@ -108,6 +126,7 @@ internal class DesktopPlaybackCoordinator private constructor(
     fun onScrollStart() {
         if (released || scrolling) return
         scrolling = true
+        activeSlot?.let { trace(it, "pause-command", "reason=scroll-start") }
         activeSlot?.capturePresentedFrame()?.let { captured ->
             updatePage(captured.index) { copy(scrollFrame = captured.frame) }
         }
@@ -144,339 +163,6 @@ internal class DesktopPlaybackCoordinator private constructor(
         runCatching { factory.release() }
     }
 
-    private fun assign(
-        slot: DesktopPlayerSlot,
-        index: Int,
-        startPaused: Boolean,
-    ) {
-        val previousAssignment = slot.assignment
-        if (previousAssignment?.index == currentIndex && slot === activeSlot) {
-            saveActivePosition()
-        }
-        runCatching { slot.player.controls().stop() }
-        previousAssignment?.let { old ->
-            updatePage(old.index) {
-                copy(
-                    surfaceId = null,
-                    posterUrl = posterUrlFor(old.index),
-                    frameReady = false,
-                    isPlaying = false,
-                    isBuffering = false,
-                    standbyReady = false,
-                )
-            }
-        }
-
-        val assignment =
-            DesktopSlotAssignment(
-                index = index,
-                videoId = items[index].id,
-                sourceUri = items[index].source.uri,
-                generation = ++generation,
-            )
-        slot.assignment = assignment
-        slot.phase = DesktopSlotPhase.PREPARING
-        slot.buffering = true
-
-        val startedAtNanos = System.nanoTime()
-
-        slot.startupStartedAtNanos =
-            if (startPaused) {
-                0L
-            } else {
-                startedAtNanos
-            }
-
-        slot.preloadStartedAtNanos =
-            if (startPaused) {
-                startedAtNanos
-            } else {
-                0L
-            }
-
-        slot.pendingSeekMs = positionFor(index)
-        slot.frameReady = false
-
-        updatePage(index) {
-            copy(
-                surfaceId = slot.id,
-                posterUrl = posterUrlFor(index),
-                frameReady = false,
-                isPlaying = false,
-                isBuffering = true,
-                standbyReady = false,
-                errorMessage = null,
-                startupSource =
-                    if (startPaused) {
-                        DesktopStartupSource.STANDBY
-                    } else {
-                        DesktopStartupSource.COLD
-                    },
-                preloadTimeMs = null,
-            )
-        }
-
-        slot.player.audio().setMute(startPaused || muted)
-        if (startPaused) {
-            slot.execute(PendingPlayerAction.StartPausedMrl(assignment.sourceUri))
-        } else {
-            slot.execute(PendingPlayerAction.PlayMrl(assignment.sourceUri))
-        }
-    }
-
-    private fun prepareAdjacent(
-        centerIndex: Int,
-        direction: DesktopScrollDirection,
-    ) {
-        preferredAdjacentIndex(centerIndex, direction, items.lastIndex)?.let(::preloadPage)
-    }
-
-    private fun addPlayerListener(slot: DesktopPlayerSlot) {
-        val listener =
-            object : MediaPlayerEventAdapter() {
-                override fun playing(mediaPlayer: MediaPlayer) {
-                    val assignment = slot.validAssignment(mediaPlayer) ?: return
-                    slot.phase = DesktopSlotPhase.PLAYING
-                    val seekMs = slot.pendingSeekMs
-                    slot.pendingSeekMs = 0L
-                    if (seekMs > 0L) {
-                        mediaPlayer.submit { mediaPlayer.controls().setTime(seekMs) }
-                    }
-                    publish(assignment) {
-                        copy(isPlaying = slot === activeSlot, errorMessage = null)
-                    }
-                }
-
-                override fun paused(mediaPlayer: MediaPlayer) {
-                    val assignment =
-                        slot.validAssignment(mediaPlayer)
-                            ?: return
-
-                    slot.phase = DesktopSlotPhase.READY
-
-                    if (slot !== activeSlot) {
-                        /*
-                         * startPaused() pauses immediately after the first frame,
-                         * therefore this standby slot is ready for promotion.
-                         */
-                        markFrameReady(
-                            slot = slot,
-                            assignment = assignment,
-                        )
-                    } else {
-                        publish(assignment) {
-                            copy(
-                                isPlaying = false,
-                                isBuffering = false,
-                                standbyReady = false,
-                            )
-                        }
-                    }
-                }
-
-                override fun stopped(mediaPlayer: MediaPlayer) {
-                    val assignment = slot.validAssignment(mediaPlayer) ?: return
-                    if (slot.phase != DesktopSlotPhase.RELEASED) slot.phase = DesktopSlotPhase.EMPTY
-                    publish(assignment) { copy(isPlaying = false, isBuffering = false) }
-                }
-
-                override fun videoOutput(
-                    mediaPlayer: MediaPlayer,
-                    newCount: Int,
-                ) {
-                    if (newCount <= 0) return
-
-                    val assignment =
-                        slot.validAssignment(mediaPlayer)
-                            ?: return
-
-                    if (slot !== activeSlot) {
-                        slot.phase = DesktopSlotPhase.READY
-                    }
-
-                    markFrameReady(
-                        slot = slot,
-                        assignment = assignment,
-                    )
-                }
-
-                override fun timeChanged(
-                    mediaPlayer: MediaPlayer,
-                    newTime: Long,
-                ) {
-                    val assignment = slot.validAssignment(mediaPlayer) ?: return
-                    val isCurrentPlayback =
-                        slot === activeSlot &&
-                            assignment.index == currentIndex
-                    if (!isCurrentPlayback) {
-                        return
-                    }
-                    if (newTime > 0L) savedPositionsMs[assignment.videoId] = newTime
-                    if (slot.buffering) {
-                        slot.buffering = false
-                        publish(assignment) {
-                            copy(isBuffering = false)
-                        }
-                    }
-                    if (!slot.frameReady) {
-                        markFrameReady(
-                            slot = slot,
-                            assignment = assignment,
-                        )
-                    }
-                }
-
-                override fun buffering(
-                    mediaPlayer: MediaPlayer,
-                    newCache: Float,
-                ) {
-                    val assignment = slot.validAssignment(mediaPlayer) ?: return
-                    val nowBuffering = newCache < BUFFER_COMPLETE_PERCENT
-                    val enteredRebuffer =
-                        slot === activeSlot && nowBuffering && !slot.buffering && slot.frameReady
-                    slot.buffering = nowBuffering
-                    publish(assignment) {
-                        copy(
-                            isBuffering = slot === activeSlot && nowBuffering,
-                            rebufferCount = rebufferCount + if (enteredRebuffer) 1 else 0,
-                        )
-                    }
-                }
-
-                override fun finished(mediaPlayer: MediaPlayer) {
-                    val assignment = slot.validAssignment(mediaPlayer) ?: return
-                    slot.phase = DesktopSlotPhase.ENDED
-                    if (slot === activeSlot && assignment.index == currentIndex) {
-                        mediaPlayer.submit {
-                            mediaPlayer.controls().setTime(0L)
-                            mediaPlayer.controls().play()
-                        }
-                    }
-                }
-
-                override fun error(mediaPlayer: MediaPlayer) {
-                    val assignment = slot.validAssignment(mediaPlayer) ?: return
-                    slot.phase = DesktopSlotPhase.FAILED
-                    slot.buffering = false
-                    publish(assignment) {
-                        copy(
-                            isPlaying = false,
-                            isBuffering = false,
-                            standbyReady = false,
-                            errorCount = errorCount + 1,
-                            errorMessage = "LibVLC could not play this media source",
-                        )
-                    }
-                }
-            }
-        slot.listener = listener
-        slot.player.events().addMediaPlayerEventListener(listener)
-    }
-
-    private fun markFrameReady(
-        slot: DesktopPlayerSlot,
-        assignment: DesktopSlotAssignment,
-    ) {
-        if (slot.frameReady) return
-
-        val nowNanos = System.nanoTime()
-        val isActive =
-            slot === activeSlot &&
-                assignment.index == currentIndex
-
-        val startupMs =
-            slot.startupStartedAtNanos
-                .takeIf { isActive && it != 0L }
-                ?.let { startedAt ->
-                    (nowNanos - startedAt) / NANOS_PER_MILLISECOND
-                }
-
-        val preloadMs =
-            slot.preloadStartedAtNanos
-                .takeIf { !isActive && it != 0L }
-                ?.let { startedAt ->
-                    (nowNanos - startedAt) / NANOS_PER_MILLISECOND
-                }
-
-        slot.frameReady = true
-        slot.buffering = false
-        slot.startupStartedAtNanos = 0L
-        slot.preloadStartedAtNanos = 0L
-
-        publish(assignment) {
-            copy(
-                frameReady = true,
-                isBuffering = false,
-                standbyReady = !isActive,
-                startupTimeMs =
-                    if (isActive) {
-                        startupMs
-                    } else {
-                        startupTimeMs
-                    },
-                preloadTimeMs =
-                    if (isActive) {
-                        preloadTimeMs
-                    } else {
-                        preloadMs
-                    },
-            )
-        }
-    }
-
-    private fun DesktopPlayerSlot.validAssignment(mediaPlayer: MediaPlayer): DesktopSlotAssignment? {
-        if (released || player !== mediaPlayer) return null
-        val current = assignment
-        val currentMrl = runCatching { mediaPlayer.media().info().mrl() }.getOrNull()
-        return current?.takeIf { currentMrl == null || currentMrl == it.sourceUri }
-    }
-
-    private fun saveActivePosition() {
-        val slot = activeSlot ?: return
-        val assignment = slot.assignment ?: return
-        val position = runCatching { slot.player.status().time() }.getOrDefault(0L)
-        if (position > 0L) savedPositionsMs[assignment.videoId] = position
-        updatePage(assignment.index) {
-            copy(posterUrl = items[assignment.index].thumbnailUrlAt(position))
-        }
-    }
-
-    private fun positionFor(index: Int): Long = savedPositionsMs[items[index].id] ?: 0L
-
-    private fun posterUrlFor(index: Int): String {
-        val positionMs = positionFor(index)
-        return if (positionMs > 0L) items[index].thumbnailUrlAt(positionMs) else items[index].images.posterUrl
-    }
-
-    private fun slotAssignedTo(index: Int): DesktopPlayerSlot? {
-        return slots.firstOrNull { it.assignment?.index == index }
-    }
-
-    private fun slotForNewAssignment(): DesktopPlayerSlot {
-        return slots.firstOrNull { it !== activeSlot } ?: requireNotNull(activeSlot)
-    }
-
-    private fun updatePage(
-        index: Int,
-        transform: DesktopPagePlaybackState.() -> DesktopPagePlaybackState,
-    ) {
-        mutableState.update { state ->
-            val page = state.pages[index] ?: return@update state
-            state.copy(pages = state.pages + (index to page.transform()))
-        }
-    }
-
-    private fun publish(
-        assignment: DesktopSlotAssignment,
-        transform: DesktopPagePlaybackState.() -> DesktopPagePlaybackState,
-    ) {
-        if (released) return
-        SwingUtilities.invokeLater {
-            if (released || slotAssignedTo(assignment.index)?.assignment != assignment) return@invokeLater
-            updatePage(assignment.index, transform)
-        }
-    }
-
     internal companion object {
         fun create(
             items: List<VideoItem>,
@@ -486,7 +172,6 @@ internal class DesktopPlaybackCoordinator private constructor(
             return runCatching {
                 val createdFactory = MediaPlayerFactory()
                 factory = createdFactory
-                val mediaOptions = config.mediaOptions()
                 val slots =
                     List(PLAYER_COUNT) { id ->
                         val component =
@@ -507,7 +192,6 @@ internal class DesktopPlaybackCoordinator private constructor(
                                 component = component,
                                 player = player,
                                 surface = component,
-                                mediaOptions = mediaOptions,
                             )
                         component.addHierarchyListener { _ ->
                             if (component.isDisplayable) {
@@ -516,7 +200,7 @@ internal class DesktopPlaybackCoordinator private constructor(
                         }
                         slot
                     }
-                DesktopPlaybackCoordinator(items = items, factory = createdFactory, slots = slots)
+                DesktopPlaybackCoordinator(items = items, factory = createdFactory, slots = slots, config = config)
             }.onFailure {
                 runCatching { factory?.release() }
             }.recoverCatching { cause ->
@@ -531,172 +215,8 @@ internal class DesktopPlaybackCoordinator private constructor(
         private const val NO_ACTIVE_INDEX = -1
         private const val DEFAULT_VIDEO_WIDTH = 540
         private const val DEFAULT_VIDEO_HEIGHT = 960
-        private const val BUFFER_COMPLETE_PERCENT = 100f
-        private const val NANOS_PER_MILLISECOND = 1_000_000L
     }
 }
 
-internal data class DesktopPlaybackState(
-    val activeIndex: Int = -1,
-    val pages: Map<Int, DesktopPagePlaybackState> = emptyMap(),
-) {
-    val activePage: DesktopPagePlaybackState?
-        get() = pages[activeIndex]
-}
-
-private fun DesktopPlaybackState.withoutScrollFrames(): DesktopPlaybackState =
-    copy(pages = pages.mapValues { (_, page) -> page.copy(scrollFrame = null) })
-
-internal data class DesktopPagePlaybackState(
-    val surfaceId: Int? = null,
-    val posterUrl: String,
-    val scrollFrame: ImageBitmap? = null,
-    val frameReady: Boolean = false,
-    val isPlaying: Boolean = false,
-    val isBuffering: Boolean = false,
-    val standbyReady: Boolean = false,
-    val startupSource: DesktopStartupSource = DesktopStartupSource.COLD,
-    val startupTimeMs: Long? = null,
-    val preloadTimeMs: Long? = null,
-    val rebufferCount: Int = 0,
-    val errorCount: Int = 0,
-    val errorMessage: String? = null,
-)
-
-internal enum class DesktopStartupSource {
-    COLD,
-    STANDBY,
-}
-
-internal enum class DesktopScrollDirection {
-    INITIAL,
-    FORWARD,
-    BACKWARD,
-}
-
-internal fun scrollDirection(
-    from: Int,
-    to: Int,
-): DesktopScrollDirection =
-    when {
-        from < 0 -> DesktopScrollDirection.INITIAL
-        to > from -> DesktopScrollDirection.FORWARD
-        else -> DesktopScrollDirection.BACKWARD
-    }
-
-internal fun preferredAdjacentIndex(
-    centerIndex: Int,
-    direction: DesktopScrollDirection,
-    lastIndex: Int,
-): Int? {
-    val preferred =
-        if (direction == DesktopScrollDirection.BACKWARD) centerIndex - 1 else centerIndex + 1
-    val fallback =
-        if (direction == DesktopScrollDirection.BACKWARD) centerIndex + 1 else centerIndex - 1
-    return listOf(preferred, fallback).firstOrNull { it in 0..lastIndex }
-}
-
-private data class DesktopSlotAssignment(
-    val index: Int,
-    val videoId: String,
-    val sourceUri: String,
-    val generation: Long,
-)
-
-private enum class DesktopSlotPhase {
-    EMPTY,
-    PREPARING,
-    READY,
-    PLAYING,
-    ENDED,
-    FAILED,
-    RELEASED,
-}
-
-internal sealed interface PendingPlayerAction {
-    object None : PendingPlayerAction
-
-    data class PlayMrl(val mrl: String) : PendingPlayerAction
-
-    data class StartPausedMrl(val mrl: String) : PendingPlayerAction
-
-    object Resume : PendingPlayerAction
-}
-
-private class DesktopPlayerSlot(
-    val id: Int,
-    val component: CallbackMediaPlayerComponent,
-    val player: EmbeddedMediaPlayer,
-    val surface: Component,
-    private val mediaOptions: Array<String>,
-) {
-    var assignment: DesktopSlotAssignment? = null
-    var phase: DesktopSlotPhase = DesktopSlotPhase.EMPTY
-    var pendingSeekMs: Long = 0L
-    var startupStartedAtNanos: Long = 0L
-    var frameReady: Boolean = false
-    var preloadStartedAtNanos: Long = 0L
-    var buffering: Boolean = false
-    var listener: MediaPlayerEventAdapter? = null
-    var pendingAction: PendingPlayerAction = PendingPlayerAction.None
-
-    fun execute(action: PendingPlayerAction) {
-        if (surface.isDisplayable) {
-            pendingAction = PendingPlayerAction.None
-            when (action) {
-                is PendingPlayerAction.PlayMrl -> {
-                    player.media().play(
-                        action.mrl,
-                        *mediaOptions,
-                    )
-                }
-
-                is PendingPlayerAction.StartPausedMrl -> {
-                    player.media().startPaused(
-                        action.mrl,
-                        *mediaOptions,
-                    )
-                }
-
-                is PendingPlayerAction.Resume -> {
-                    player.controls().play()
-                }
-
-                PendingPlayerAction.None -> {}
-            }
-        } else {
-            pendingAction = action
-        }
-    }
-
-    fun executeResume() {
-        val action = pendingAction
-        if (action is PendingPlayerAction.StartPausedMrl) {
-            execute(PendingPlayerAction.PlayMrl(action.mrl))
-        } else if (action is PendingPlayerAction.PlayMrl) {
-            // Already going to play the media when displayable, nothing to do
-        } else {
-            execute(PendingPlayerAction.Resume)
-        }
-    }
-}
-
-private data class CapturedDesktopFrame(
-    val index: Int,
-    val frame: ImageBitmap,
-)
-
-private fun DesktopPlayerSlot.capturePresentedFrame(): CapturedDesktopFrame? {
-    val currentAssignment = assignment
-    val frame =
-        if (frameReady && currentAssignment != null) {
-            captureComponentFrame(component.videoSurfaceComponent())
-        } else {
-            null
-        }
-    return if (currentAssignment != null && frame != null) {
-        CapturedDesktopFrame(index = currentAssignment.index, frame = frame)
-    } else {
-        null
-    }
-}
+internal const val BUFFER_COMPLETE_PERCENT = 100f
+internal const val NANOS_PER_MILLISECOND = 1_000_000L
