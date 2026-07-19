@@ -4,12 +4,14 @@ import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
 import uk.co.caprica.vlcj.player.component.CallbackMediaPlayerComponent
 import uk.co.caprica.vlcj.player.embedded.EmbeddedMediaPlayer
 import java.awt.Component
+import javax.swing.SwingUtilities
 
 internal sealed interface PendingPlayerAction {
     object None : PendingPlayerAction
 
     data class PlayMrl(
         val mrl: String,
+        val generation: Long,
         val options: Array<out String>,
     ) : PendingPlayerAction {
         override fun equals(other: Any?): Boolean {
@@ -17,18 +19,22 @@ internal sealed interface PendingPlayerAction {
             if (javaClass != other?.javaClass) return false
             other as PlayMrl
             if (mrl != other.mrl) return false
+            if (generation != other.generation) return false
             if (!options.contentEquals(other.options)) return false
             return true
         }
 
         override fun hashCode(): Int {
             var result = mrl.hashCode()
+            result = 31 * result + generation.hashCode()
             result = 31 * result + options.contentHashCode()
             return result
         }
     }
 
-    object Resume : PendingPlayerAction
+    data class Resume(
+        val generation: Long,
+    ) : PendingPlayerAction
 }
 
 internal class DesktopPlayerSlot(
@@ -42,8 +48,12 @@ internal class DesktopPlayerSlot(
     private var warmupPauseRequested = false
     private var resumeAfterWarmupPause = false
 
+    @Volatile
     var assignment: DesktopSlotAssignment? = null
+
+    @Volatile
     var phase: DesktopSlotPhase = DesktopSlotPhase.EMPTY
+
     var pendingSeekMs: Long = 0L
     var presentationBaselineMs: Long = 0L
     var startupStartedAtNanos: Long = 0L
@@ -51,7 +61,11 @@ internal class DesktopPlayerSlot(
     var preloadStartedAtNanos: Long = 0L
     var buffering: Boolean = false
     var listener: MediaPlayerEventAdapter? = null
+
+    @Volatile
     var pendingAction: PendingPlayerAction = PendingPlayerAction.None
+
+    fun assignmentGeneration(): Long? = assignment?.generation
 
     fun execute(action: PendingPlayerAction) {
         if (surface.isDisplayable) {
@@ -60,7 +74,10 @@ internal class DesktopPlayerSlot(
                 is PendingPlayerAction.PlayMrl -> {
                     player.submit {
                         val currentAssignment = assignment
-                        if (currentAssignment?.sourceUri == action.mrl) {
+                        if (
+                            currentAssignment?.generation == action.generation &&
+                            currentAssignment.sourceUri == action.mrl
+                        ) {
                             val startedAtNanos =
                                 if (DesktopPlaybackTrace.enabled) System.nanoTime() else 0L
                             DesktopPlaybackTrace.log {
@@ -86,7 +103,9 @@ internal class DesktopPlayerSlot(
                 }
 
                 is PendingPlayerAction.Resume -> {
-                    player.controls().play()
+                    if (assignmentGeneration() == action.generation) {
+                        player.controls().play()
+                    }
                 }
 
                 PendingPlayerAction.None -> {}
@@ -101,7 +120,9 @@ internal class DesktopPlayerSlot(
         if (action is PendingPlayerAction.PlayMrl) {
             // Already going to play the media when displayable, nothing to do
         } else {
-            execute(PendingPlayerAction.Resume)
+            assignmentGeneration()?.let { currentGeneration ->
+                execute(PendingPlayerAction.Resume(currentGeneration))
+            }
         }
     }
 
@@ -162,6 +183,11 @@ internal data class DesktopSlotAssignment(
     val generation: Long,
 )
 
+internal fun matchesGeneration(
+    assignment: DesktopSlotAssignment?,
+    eventGeneration: Long,
+): Boolean = assignment?.generation == eventGeneration
+
 internal data class WarmupPauseOutcome(
     val wasRequested: Boolean,
     val resumeActive: Boolean,
@@ -174,15 +200,19 @@ internal data class CapturedDesktopFrame(
 
 internal fun DesktopPlayerSlot.capturePresentedFrame(): CapturedDesktopFrame? {
     val currentAssignment = assignment
-    val frame =
-        if (frameReady && currentAssignment != null) {
-            captureComponentFrame(component.videoSurfaceComponent())
-        } else {
-            null
-        }
-    return if (currentAssignment != null && frame != null) {
-        CapturedDesktopFrame(index = currentAssignment.index, frame = frame)
+    if (!frameReady || currentAssignment == null) return null
+
+    var frame: androidx.compose.ui.graphics.ImageBitmap? = null
+    val capture = {
+        frame = captureComponentFrame(component.videoSurfaceComponent())
+    }
+    if (SwingUtilities.isEventDispatchThread()) {
+        capture()
     } else {
-        null
+        SwingUtilities.invokeAndWait { capture() }
+    }
+
+    return frame?.let { captured ->
+        CapturedDesktopFrame(index = currentAssignment.index, frame = captured)
     }
 }

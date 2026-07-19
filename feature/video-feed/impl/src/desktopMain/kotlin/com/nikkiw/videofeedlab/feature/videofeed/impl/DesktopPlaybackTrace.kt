@@ -1,5 +1,6 @@
 package com.nikkiw.videofeedlab.feature.videofeed.impl
 
+import java.util.logging.Level
 import java.util.logging.Logger
 
 /** Opt-in desktop playback tracing kept out of the measured hot path by default. */
@@ -20,5 +21,9 @@ internal object DesktopPlaybackTrace {
         if (enabled) {
             logger.info(message())
         }
+    }
+
+    fun failure(error: Throwable) {
+        logger.log(Level.SEVERE, "Desktop playback event-loop task failed", error)
     }
 }
