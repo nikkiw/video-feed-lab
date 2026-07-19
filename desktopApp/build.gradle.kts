@@ -31,4 +31,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.compose.ui)
     implementation(libs.koin.core)
+    implementation(libs.decompose)
+    implementation(libs.decompose.compose)
+
+    testImplementation(kotlin("test"))
 }

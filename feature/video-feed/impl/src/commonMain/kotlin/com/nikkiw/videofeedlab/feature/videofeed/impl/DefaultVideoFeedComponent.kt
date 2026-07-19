@@ -24,6 +24,7 @@ class DefaultVideoFeedComponent(
             VideoFeedStoreFactory(
                 storeFactory = storeFactory,
                 repository = repository,
+                initialActiveIndex = launchParams.startIndex,
             ).create()
         }
 
