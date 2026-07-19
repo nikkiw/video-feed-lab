@@ -108,63 +108,10 @@ internal fun DesktopPlaybackCoordinator.replacePlayerListener(
                         slot === activeSlot &&
                             assignment.index == currentIndex
                     if (!isCurrentPlayback) {
-                        if (
-                            slot.phase == DesktopSlotPhase.PLAYING &&
-                            shouldPauseStandbyAfterProgress(
-                                pauseAfterWarmup = slot.shouldPauseAfterWarmup(),
-                                playbackTimeMs = newTime,
-                            ) &&
-                            slot.requestWarmupPause()
-                        ) {
-                            trace(slot, "warmup-progress", "timeMs=$newTime action=pause")
-                            mediaPlayer.submit {
-                                val shouldPause =
-                                    isCurrentAssignment(slot, assignment) &&
-                                        slot.isWarmupPauseRequested() &&
-                                        activeSlotId != slot.id
-                                if (shouldPause) {
-                                    val pauseStartedAtNanos = System.nanoTime()
-                                    traceFromPlayerThread(
-                                        slot = slot,
-                                        event = "pause-call-start",
-                                        details = "reason=standby-warmup",
-                                    )
-                                    mediaPlayer.controls().pause()
-                                    traceFromPlayerThread(
-                                        slot = slot,
-                                        event = "pause-call-return",
-                                        details =
-                                            "reason=standby-warmup durationMs=" +
-                                                (System.nanoTime() - pauseStartedAtNanos) /
-                                                NANOS_PER_MILLISECOND,
-                                    )
-                                }
-                            }
-                        }
+                        handleStandbyTimeChanged(slot, mediaPlayer, assignment, newTime)
                         return@enqueuePlayerEvent
                     }
-                    if (newTime > 0L) savedPositionsMs[assignment.videoId] = newTime
-                    if (!slot.frameReady) {
-                        trace(slot, "active-startup-time", "timeMs=$newTime")
-                    }
-                    if (slot.buffering) {
-                        slot.buffering = false
-                        publish(assignment) {
-                            copy(isBuffering = false)
-                        }
-                    }
-                    if (
-                        !slot.frameReady &&
-                        hasAdvancedForPresentation(
-                            playbackTimeMs = newTime,
-                            baselineTimeMs = slot.presentationBaselineMs,
-                        )
-                    ) {
-                        markFrameReady(
-                            slot = slot,
-                            assignment = assignment,
-                        )
-                    }
+                    handleActiveTimeChanged(slot, assignment, newTime)
                 }
             }
 
@@ -177,6 +124,12 @@ internal fun DesktopPlaybackCoordinator.replacePlayerListener(
                     val enteredRebuffer =
                         slot === activeSlot && nowBuffering && !slot.buffering && slot.frameReady
                     slot.buffering = nowBuffering
+                    if (enteredRebuffer) {
+                        activePreloadEligible = false
+                        slot.preloadEligibilityBaselineMs =
+                            runCatching { mediaPlayer.status().time() }.getOrDefault(0L)
+                        suspendStandbyWarmupForActiveRebuffer()
+                    }
                     val shouldTraceBuffering =
                         slot === activeSlot &&
                             (
@@ -222,6 +175,95 @@ internal fun DesktopPlaybackCoordinator.replacePlayerListener(
         }
     slot.listener = listener
     slot.player.events().addMediaPlayerEventListener(listener)
+}
+
+private fun DesktopPlaybackCoordinator.handleStandbyTimeChanged(
+    slot: DesktopPlayerSlot,
+    mediaPlayer: MediaPlayer,
+    assignment: DesktopSlotAssignment,
+    newTime: Long,
+) {
+    if (
+        slot.phase == DesktopSlotPhase.PLAYING &&
+        shouldPauseStandbyAfterProgress(
+            pauseAfterWarmup = slot.shouldPauseAfterWarmup(),
+            playbackTimeMs = newTime,
+        ) &&
+        slot.requestWarmupPause()
+    ) {
+        trace(slot, "warmup-progress", "timeMs=$newTime action=pause")
+        mediaPlayer.submit {
+            val shouldPause =
+                isCurrentAssignment(slot, assignment) &&
+                    slot.isWarmupPauseRequested() &&
+                    activeSlotId != slot.id
+            if (shouldPause) {
+                val pauseStartedAtNanos = System.nanoTime()
+                traceFromPlayerThread(
+                    slot = slot,
+                    event = "pause-call-start",
+                    details = "reason=standby-warmup",
+                )
+                mediaPlayer.controls().pause()
+                traceFromPlayerThread(
+                    slot = slot,
+                    event = "pause-call-return",
+                    details =
+                        "reason=standby-warmup durationMs=" +
+                            (System.nanoTime() - pauseStartedAtNanos) /
+                            NANOS_PER_MILLISECOND,
+                )
+            }
+        }
+    }
+}
+
+private fun DesktopPlaybackCoordinator.handleActiveTimeChanged(
+    slot: DesktopPlayerSlot,
+    assignment: DesktopSlotAssignment,
+    newTime: Long,
+) {
+    if (newTime > 0L) savedPositionsMs[assignment.videoId] = newTime
+    if (!slot.frameReady) {
+        trace(slot, "active-startup-time", "timeMs=$newTime")
+    }
+    if (slot.buffering) {
+        slot.buffering = false
+        publish(assignment) {
+            copy(isBuffering = false)
+        }
+    }
+    if (
+        !slot.frameReady &&
+        hasAdvancedForPresentation(
+            playbackTimeMs = newTime,
+            baselineTimeMs = slot.presentationBaselineMs,
+        )
+    ) {
+        markFrameReady(
+            slot = slot,
+            assignment = assignment,
+        )
+    }
+    if (
+        !activePreloadEligible &&
+        canStartStandbyPreload(
+            sourceMode = config.sourceMode,
+            frameReady = slot.frameReady,
+            isBuffering = slot.buffering,
+            playbackTimeMs = newTime,
+            baselineTimeMs = slot.preloadEligibilityBaselineMs,
+            minimumStablePlaybackMs = config.activeStablePlaybackMs,
+        )
+    ) {
+        activePreloadEligible = true
+        trace(
+            slot,
+            "active-stable",
+            "timeMs=$newTime baselineMs=${slot.preloadEligibilityBaselineMs}",
+        )
+        startPendingPreloadIfEligible()
+    }
 }
 
 private fun DesktopPlaybackCoordinator.enqueuePlayerEvent(

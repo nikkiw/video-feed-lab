@@ -37,6 +37,8 @@ internal class DesktopPlaybackCoordinator private constructor(
     internal var generation = 0L
     internal var muted = false
     internal var scrolling = false
+    internal var pendingPreloadIndex: Int? = null
+    internal var activePreloadEligible = false
     internal var released = false
 
     @Volatile
@@ -61,8 +63,11 @@ internal class DesktopPlaybackCoordinator private constructor(
     }
 
     fun preloadPage(index: Int) {
-        if (index !in items.indices || releaseRequested.get()) return
-        eventLoop.dispatch { preloadPageOnEventLoop(index) }
+        if (released || index !in items.indices || index == currentIndex) return
+        if (!config.sourceMode.supportsStandbyPreload) return
+
+        pendingPreloadIndex = index
+        startPendingPreloadIfEligible()
     }
 
     fun onScrollStart() {
@@ -121,6 +126,8 @@ internal class DesktopPlaybackCoordinator private constructor(
             return
         }
 
+        activePreloadEligible = false
+        pendingPreloadIndex = null
         saveActivePosition()
         val previousIndex = currentIndex
         val direction = scrollDirection(previousIndex, index)
@@ -175,7 +182,7 @@ internal class DesktopPlaybackCoordinator private constructor(
             }
         }
 
-        prepareAdjacent(index, direction)
+        queueAdjacentPreload(index, direction)
     }
 
     internal fun preloadPageOnEventLoop(index: Int) {
@@ -241,7 +248,10 @@ internal class DesktopPlaybackCoordinator private constructor(
     internal companion object {
         fun create(
             items: List<VideoItem>,
-            config: DesktopPlaybackConfig = DesktopPlaybackConfig(),
+            config: DesktopPlaybackConfig =
+                DesktopPlaybackConfig(
+                    sourceMode = desktopSourceModeFromEnvironment(),
+                ),
         ): Result<DesktopPlaybackCoordinator> {
             var factory: MediaPlayerFactory? = null
             var eventLoop: DesktopPlaybackEventLoop? = null

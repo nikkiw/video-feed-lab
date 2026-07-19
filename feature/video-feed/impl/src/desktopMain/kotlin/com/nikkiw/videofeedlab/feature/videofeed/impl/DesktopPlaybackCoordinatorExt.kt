@@ -31,12 +31,7 @@ internal fun DesktopPlaybackCoordinator.validAssignment(
     return current?.takeIf { currentMrl == null || currentMrl == it.sourceUri }
 }
 
-internal fun DesktopPlaybackCoordinator.assign(
-    slot: DesktopPlayerSlot,
-    index: Int,
-    startPaused: Boolean,
-) {
-    assertEventLoopThread()
+private fun DesktopPlaybackCoordinator.clearPreviousAssignment(slot: DesktopPlayerSlot) {
     val previousAssignment = slot.assignment
     if (previousAssignment?.index == currentIndex && slot === activeSlot) {
         saveActivePosition()
@@ -53,40 +48,50 @@ internal fun DesktopPlaybackCoordinator.assign(
             )
         }
     }
+}
 
-    val assignment =
-        DesktopSlotAssignment(
-            index = index,
-            videoId = items[index].id,
-            sourceUri = items[index].source.uri,
-            generation = ++generation,
-        )
+private fun DesktopPlaybackCoordinator.initializeSlotAssignment(
+    slot: DesktopPlayerSlot,
+    assignment: DesktopSlotAssignment,
+    startPaused: Boolean,
+) {
     slot.assignment = assignment
     replacePlayerListener(slot, assignment.generation)
     slot.phase = DesktopSlotPhase.PREPARING
     slot.buffering = true
 
     val startedAtNanos = System.nanoTime()
+    slot.startupStartedAtNanos = if (startPaused) 0L else startedAtNanos
+    slot.preloadStartedAtNanos = if (startPaused) startedAtNanos else 0L
 
-    slot.startupStartedAtNanos =
-        if (startPaused) {
-            0L
-        } else {
-            startedAtNanos
-        }
-
-    slot.preloadStartedAtNanos =
-        if (startPaused) {
-            startedAtNanos
-        } else {
-            0L
-        }
-
-    slot.pendingSeekMs = positionFor(index)
+    slot.pendingSeekMs = positionFor(assignment.index)
     slot.presentationBaselineMs = slot.pendingSeekMs
+    slot.preloadEligibilityBaselineMs = slot.pendingSeekMs
     slot.frameReady = false
     slot.resetWarmup(startPaused)
     trace(slot, "assign", "mode=${if (startPaused) "standby" else "active"}")
+}
+
+internal fun DesktopPlaybackCoordinator.assign(
+    slot: DesktopPlayerSlot,
+    index: Int,
+    startPaused: Boolean,
+) {
+    assertEventLoopThread()
+    clearPreviousAssignment(slot)
+
+    val assignment =
+        DesktopSlotAssignment(
+            index = index,
+            videoId = items[index].id,
+            sourceUri =
+                resolveDesktopPlaybackUri(
+                    sourceUri = items[index].source.uri,
+                    sourceMode = config.sourceMode,
+                ),
+            generation = ++generation,
+        )
+    initializeSlotAssignment(slot, assignment, startPaused)
 
     updatePage(index) {
         copy(
@@ -128,6 +133,9 @@ internal fun DesktopPlaybackCoordinator.promoteReadyStandby(
     index: Int,
 ) {
     slot.clearWarmup()
+    val currentPlaybackTimeMs =
+        runCatching { slot.player.status().time() }.getOrDefault(0L)
+    slot.preloadEligibilityBaselineMs = currentPlaybackTimeMs
     slot.startupStartedAtNanos = 0L
     slot.preloadStartedAtNanos = 0L
 
@@ -151,6 +159,9 @@ internal fun DesktopPlaybackCoordinator.promoteWarmingStandby(
     index: Int,
 ) {
     val awaitingWarmupPause = slot.promoteWarmupToActive()
+    val currentPlaybackTimeMs =
+        runCatching { slot.player.status().time() }.getOrDefault(0L)
+    slot.preloadEligibilityBaselineMs = currentPlaybackTimeMs
     slot.startupStartedAtNanos = System.nanoTime()
 
     updatePage(index) {
@@ -168,11 +179,93 @@ internal fun DesktopPlaybackCoordinator.promoteWarmingStandby(
     }
 }
 
-internal fun DesktopPlaybackCoordinator.prepareAdjacent(
+internal fun DesktopPlaybackCoordinator.queueAdjacentPreload(
     centerIndex: Int,
     direction: DesktopScrollDirection,
 ) {
-    preferredAdjacentIndex(centerIndex, direction, items.lastIndex)?.let(::preloadPageOnEventLoop)
+    if (!config.sourceMode.supportsStandbyPreload) {
+        pendingPreloadIndex = null
+        return
+    }
+
+    pendingPreloadIndex =
+        preferredAdjacentIndex(
+            centerIndex = centerIndex,
+            direction = direction,
+            lastIndex = items.lastIndex,
+        )
+    startPendingPreloadIfEligible()
+}
+
+internal fun DesktopPlaybackCoordinator.startPendingPreloadIfEligible() {
+    val index = getEligiblePendingPreloadIndex()
+    if (index != null) {
+        val standby = slots.firstOrNull { it !== activeSlot }
+        if (standby != null) {
+            pendingPreloadIndex = null
+            assign(standby, index, startPaused = true)
+        }
+    }
+}
+
+private fun DesktopPlaybackCoordinator.getEligiblePendingPreloadIndex(): Int? {
+    val index = pendingPreloadIndex
+    val isEligible =
+        !released &&
+            activePreloadEligible &&
+            index != null &&
+            index in items.indices &&
+            index != currentIndex
+
+    if (!isEligible) {
+        if (index != null && (index !in items.indices || index == currentIndex)) {
+            pendingPreloadIndex = null
+        }
+        return null
+    }
+
+    val existing = slotAssignedTo(index!!)
+    val alreadyPrepared =
+        existing != null &&
+            existing !== activeSlot &&
+            existing.phase != DesktopSlotPhase.FAILED
+
+    return if (alreadyPrepared) {
+        pendingPreloadIndex = null
+        null
+    } else {
+        index
+    }
+}
+
+internal fun DesktopPlaybackCoordinator.suspendStandbyWarmupForActiveRebuffer() {
+    val standby =
+        slots.firstOrNull { slot ->
+            slot !== activeSlot &&
+                slot.assignment != null &&
+                slot.phase == DesktopSlotPhase.PREPARING
+        } ?: return
+    val assignment = standby.assignment ?: return
+
+    trace(standby, "standby-cancel", "reason=active-rebuffer")
+    pendingPreloadIndex = assignment.index
+    standby.clearWarmup()
+    standby.assignment = null
+    standby.phase = DesktopSlotPhase.EMPTY
+    standby.buffering = false
+    standby.frameReady = false
+    runCatching { standby.player.controls().stop() }
+
+    updatePage(assignment.index) {
+        copy(
+            surfaceId = null,
+            posterUrl = posterUrlFor(assignment.index),
+            frameReady = false,
+            isPlaying = false,
+            isBuffering = false,
+            standbyReady = false,
+        )
+    }
 }
 
 internal fun DesktopPlaybackCoordinator.saveActivePosition() {
