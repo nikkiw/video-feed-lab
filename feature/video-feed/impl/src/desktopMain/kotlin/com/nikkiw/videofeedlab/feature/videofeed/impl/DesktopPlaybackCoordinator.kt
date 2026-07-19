@@ -81,7 +81,7 @@ internal class DesktopPlaybackCoordinator private constructor(
             target.startupStartedAtNanos = System.nanoTime()
             updatePage(index) {
                 copy(
-                    isBuffering = !firstFramePresented,
+                    isBuffering = !frameReady,
                     errorMessage = null,
                     startupSource = DesktopStartupSource.STANDBY,
                 )
@@ -159,7 +159,7 @@ internal class DesktopPlaybackCoordinator private constructor(
                 copy(
                     surfaceId = null,
                     posterUrl = posterUrlFor(old.index),
-                    firstFramePresented = false,
+                    frameReady = false,
                     isPlaying = false,
                     isBuffering = false,
                     standbyReady = false,
@@ -177,21 +177,42 @@ internal class DesktopPlaybackCoordinator private constructor(
         slot.assignment = assignment
         slot.phase = DesktopSlotPhase.PREPARING
         slot.buffering = true
-        slot.startupStartedAtNanos = if (startPaused) 0L else System.nanoTime()
+
+        val startedAtNanos = System.nanoTime()
+
+        slot.startupStartedAtNanos =
+            if (startPaused) {
+                0L
+            } else {
+                startedAtNanos
+            }
+
+        slot.preloadStartedAtNanos =
+            if (startPaused) {
+                startedAtNanos
+            } else {
+                0L
+            }
+
         slot.pendingSeekMs = positionFor(index)
-        slot.firstFramePresented = false
+        slot.frameReady = false
 
         updatePage(index) {
             copy(
                 surfaceId = slot.id,
                 posterUrl = posterUrlFor(index),
-                firstFramePresented = false,
+                frameReady = false,
                 isPlaying = false,
                 isBuffering = true,
                 standbyReady = false,
                 errorMessage = null,
                 startupSource =
-                    if (startPaused) DesktopStartupSource.STANDBY else DesktopStartupSource.COLD,
+                    if (startPaused) {
+                        DesktopStartupSource.STANDBY
+                    } else {
+                        DesktopStartupSource.COLD
+                    },
+                preloadTimeMs = null,
             )
         }
 
@@ -227,14 +248,29 @@ internal class DesktopPlaybackCoordinator private constructor(
                 }
 
                 override fun paused(mediaPlayer: MediaPlayer) {
-                    val assignment = slot.validAssignment(mediaPlayer) ?: return
+                    val assignment =
+                        slot.validAssignment(mediaPlayer)
+                            ?: return
+
                     slot.phase = DesktopSlotPhase.READY
-                    publish(assignment) {
-                        copy(
-                            isPlaying = false,
-                            standbyReady = slot !== activeSlot,
-                            isBuffering = if (slot === activeSlot) isBuffering else false,
+
+                    if (slot !== activeSlot) {
+                        /*
+                         * startPaused() pauses immediately after the first frame,
+                         * therefore this standby slot is ready for promotion.
+                         */
+                        markFrameReady(
+                            slot = slot,
+                            assignment = assignment,
                         )
+                    } else {
+                        publish(assignment) {
+                            copy(
+                                isPlaying = false,
+                                isBuffering = false,
+                                standbyReady = false,
+                            )
+                        }
                     }
                 }
 
@@ -249,14 +285,19 @@ internal class DesktopPlaybackCoordinator private constructor(
                     newCount: Int,
                 ) {
                     if (newCount <= 0) return
-                    val assignment = slot.validAssignment(mediaPlayer) ?: return
-                    if (slot !== activeSlot) slot.phase = DesktopSlotPhase.READY
-                    publish(assignment) {
-                        copy(standbyReady = slot !== activeSlot, isBuffering = slot === activeSlot)
+
+                    val assignment =
+                        slot.validAssignment(mediaPlayer)
+                            ?: return
+
+                    if (slot !== activeSlot) {
+                        slot.phase = DesktopSlotPhase.READY
                     }
-                    if (slot === activeSlot && !slot.firstFramePresented) {
-                        markFirstFramePresented(slot, assignment)
-                    }
+
+                    markFrameReady(
+                        slot = slot,
+                        assignment = assignment,
+                    )
                 }
 
                 override fun timeChanged(
@@ -277,7 +318,12 @@ internal class DesktopPlaybackCoordinator private constructor(
                             copy(isBuffering = false)
                         }
                     }
-                    if (!slot.firstFramePresented) markFirstFramePresented(slot, assignment)
+                    if (!slot.frameReady) {
+                        markFrameReady(
+                            slot = slot,
+                            assignment = assignment,
+                        )
+                    }
                 }
 
                 override fun buffering(
@@ -287,7 +333,7 @@ internal class DesktopPlaybackCoordinator private constructor(
                     val assignment = slot.validAssignment(mediaPlayer) ?: return
                     val nowBuffering = newCache < BUFFER_COMPLETE_PERCENT
                     val enteredRebuffer =
-                        slot === activeSlot && nowBuffering && !slot.buffering && slot.firstFramePresented
+                        slot === activeSlot && nowBuffering && !slot.buffering && slot.frameReady
                     slot.buffering = nowBuffering
                     publish(assignment) {
                         copy(
@@ -327,22 +373,53 @@ internal class DesktopPlaybackCoordinator private constructor(
         slot.player.events().addMediaPlayerEventListener(listener)
     }
 
-    private fun markFirstFramePresented(
+    private fun markFrameReady(
         slot: DesktopPlayerSlot,
         assignment: DesktopSlotAssignment,
     ) {
-        slot.firstFramePresented = true
-        slot.buffering = false
+        if (slot.frameReady) return
+
+        val nowNanos = System.nanoTime()
+        val isActive =
+            slot === activeSlot &&
+                assignment.index == currentIndex
+
         val startupMs =
             slot.startupStartedAtNanos
-                .takeIf { it != 0L }
-                ?.let { (System.nanoTime() - it) / NANOS_PER_MILLISECOND }
+                .takeIf { isActive && it != 0L }
+                ?.let { startedAt ->
+                    (nowNanos - startedAt) / NANOS_PER_MILLISECOND
+                }
+
+        val preloadMs =
+            slot.preloadStartedAtNanos
+                .takeIf { !isActive && it != 0L }
+                ?.let { startedAt ->
+                    (nowNanos - startedAt) / NANOS_PER_MILLISECOND
+                }
+
+        slot.frameReady = true
+        slot.buffering = false
         slot.startupStartedAtNanos = 0L
+        slot.preloadStartedAtNanos = 0L
+
         publish(assignment) {
             copy(
-                firstFramePresented = true,
+                frameReady = true,
                 isBuffering = false,
-                startupTimeMs = startupMs,
+                standbyReady = !isActive,
+                startupTimeMs =
+                    if (isActive) {
+                        startupMs
+                    } else {
+                        startupTimeMs
+                    },
+                preloadTimeMs =
+                    if (isActive) {
+                        preloadTimeMs
+                    } else {
+                        preloadMs
+                    },
             )
         }
     }
@@ -474,12 +551,13 @@ internal data class DesktopPagePlaybackState(
     val surfaceId: Int? = null,
     val posterUrl: String,
     val scrollFrame: ImageBitmap? = null,
-    val firstFramePresented: Boolean = false,
+    val frameReady: Boolean = false,
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
     val standbyReady: Boolean = false,
     val startupSource: DesktopStartupSource = DesktopStartupSource.COLD,
     val startupTimeMs: Long? = null,
+    val preloadTimeMs: Long? = null,
     val rebufferCount: Int = 0,
     val errorCount: Int = 0,
     val errorMessage: String? = null,
@@ -556,7 +634,8 @@ private class DesktopPlayerSlot(
     var phase: DesktopSlotPhase = DesktopSlotPhase.EMPTY
     var pendingSeekMs: Long = 0L
     var startupStartedAtNanos: Long = 0L
-    var firstFramePresented: Boolean = false
+    var frameReady: Boolean = false
+    var preloadStartedAtNanos: Long = 0L
     var buffering: Boolean = false
     var listener: MediaPlayerEventAdapter? = null
     var pendingAction: PendingPlayerAction = PendingPlayerAction.None
@@ -610,7 +689,7 @@ private data class CapturedDesktopFrame(
 private fun DesktopPlayerSlot.capturePresentedFrame(): CapturedDesktopFrame? {
     val currentAssignment = assignment
     val frame =
-        if (firstFramePresented && currentAssignment != null) {
+        if (frameReady && currentAssignment != null) {
             captureComponentFrame(component.videoSurfaceComponent())
         } else {
             null

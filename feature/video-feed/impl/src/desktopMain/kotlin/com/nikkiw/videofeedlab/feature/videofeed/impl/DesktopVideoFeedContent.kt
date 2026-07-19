@@ -304,7 +304,7 @@ internal fun DesktopFeedPage(
                 )
             }
             VideoLoadingOverlay(
-                firstFramePresented = ui.playback.firstFramePresented,
+                firstFramePresented = ui.playback.frameReady,
                 active = ui.isActive,
                 forcePosterVisible = ui.isScrolling && ui.playback.scrollFrame == null,
             ) {
