@@ -16,13 +16,17 @@ import kotlinx.coroutines.launch
 class VideoFeedStoreFactory(
     private val storeFactory: StoreFactory,
     private val repository: VideoRepository,
+    private val initialActiveIndex: Int = 0,
 ) {
     fun create(): VideoFeedStore =
         object :
             VideoFeedStore,
             Store<VideoFeedStore.Intent, VideoFeedStore.State, Nothing> by storeFactory.create(
                 name = "VideoFeedStore",
-                initialState = VideoFeedStore.State(),
+                initialState =
+                    VideoFeedStore.State(
+                        activeIndex = initialActiveIndex.coerceAtLeast(0),
+                    ),
                 bootstrapper = SimpleBootstrapper(Action.LoadCatalog(forceRefresh = false)),
                 executorFactory = { ExecutorImpl(repository) },
                 reducer = ReducerImpl,
@@ -99,13 +103,21 @@ class VideoFeedStoreFactory(
                     copy(
                         items = msg.items,
                         activeIndex = nextActiveIndex,
-                        debugState = PlaybackDebugState(videoId = msg.items.getOrNull(nextActiveIndex)?.id),
+                        debugState =
+                            PlaybackDebugState(
+                                videoId =
+                                    msg.items.getOrNull(
+                                        nextActiveIndex,
+                                    )?.id,
+                            ),
                         catalogLoadState =
                             if (msg.items.isEmpty()) CatalogLoadState.Empty else CatalogLoadState.Content,
                     )
                 }
+
                 is Msg.CatalogLoadFailed ->
                     copy(catalogLoadState = CatalogLoadState.Error(msg.message))
+
                 is Msg.PageChanged ->
                     if (msg.index in items.indices) {
                         copy(
@@ -115,6 +127,7 @@ class VideoFeedStoreFactory(
                     } else {
                         this
                     }
+
                 Msg.MuteToggled -> copy(isMuted = !isMuted)
                 Msg.PlayToggled -> copy(isPlaying = !isPlaying)
                 is Msg.DebugStateUpdated -> copy(debugState = msg.debugState)
@@ -122,6 +135,7 @@ class VideoFeedStoreFactory(
     }
 
     private companion object {
-        const val CATALOG_LOAD_ERROR_MESSAGE = "Unable to load the video catalog. Check the Media Lab and retry."
+        const val CATALOG_LOAD_ERROR_MESSAGE =
+            "Unable to load the video catalog. Check the Media Lab and retry."
     }
 }
