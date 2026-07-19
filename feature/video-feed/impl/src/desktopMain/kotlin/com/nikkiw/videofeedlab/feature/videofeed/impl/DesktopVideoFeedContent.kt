@@ -42,6 +42,14 @@ internal fun DesktopVideoFeedContent(
     model: VideoFeedComponent.Model,
     onBack: (() -> Unit)?,
 ) {
+    if (model.items.isEmpty()) {
+        DesktopPlaybackUnavailable(
+            message = "No videos are available in the current catalog.",
+            onBack = onBack,
+        )
+        return
+    }
+
     val coordinatorResult = remember(model.items) { DesktopPlaybackCoordinator.create(model.items) }
     val coordinator = coordinatorResult.getOrNull()
     if (coordinator == null) {
@@ -49,6 +57,7 @@ internal fun DesktopVideoFeedContent(
             message =
                 coordinatorResult.exceptionOrNull()?.message
                     ?: "Desktop playback is unavailable",
+            onBack = onBack,
         )
         return
     }
@@ -360,11 +369,24 @@ internal val IGNORE_WHEEL: (Double) -> Unit = {}
 internal val DESKTOP_METADATA_HEIGHT = 104.dp
 
 @Composable
-internal fun DesktopPlaybackUnavailable(message: String) {
+internal fun DesktopPlaybackUnavailable(
+    message: String,
+    onBack: (() -> Unit)? = null,
+) {
     Box(
         modifier = Modifier.fillMaxSize().background(Color.Black).padding(24.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = message, color = Color.White)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(text = message, color = Color.White)
+            if (onBack != null) {
+                Button(onClick = onBack) {
+                    Text("Back")
+                }
+            }
+        }
     }
 }

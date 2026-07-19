@@ -183,24 +183,10 @@ internal fun DesktopPlaybackCoordinator.addPlayerListener(slot: DesktopPlayerSlo
             }
 
             override fun finished(mediaPlayer: MediaPlayer) {
-                val assignment = validAssignment(slot, mediaPlayer) ?: return
-                slot.phase = DesktopSlotPhase.ENDED
-                trace(slot, "finished")
-                if (slot === activeSlot && assignment.index == currentIndex) {
-                    slot.buffering = true
-                    slot.presentationBaselineMs = 0L
-                    slot.startupStartedAtNanos = System.nanoTime()
-                    publish(assignment) {
-                        copy(
-                            isPlaying = false,
-                            isBuffering = true,
-                        )
-                    }
-                    mediaPlayer.submit {
-                        mediaPlayer.controls().setTime(0L)
-                        mediaPlayer.controls().play()
-                    }
-                }
+                validAssignment(slot, mediaPlayer) ?: return
+                // :input-repeat owns looping. A second seek/play path here races
+                // with LibVLC repeat and can cause a visible restart or duplicate play.
+                trace(slot, "finished", "loop-owner=native")
             }
 
             override fun error(mediaPlayer: MediaPlayer) {
