@@ -3,11 +3,15 @@ package com.nikkiw.videofeedlab.desktop
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.arkivanov.decompose.ComponentContext
+import com.arkivanov.decompose.extensions.compose.stack.Children
+import com.arkivanov.decompose.router.stack.ChildStack
+import com.arkivanov.decompose.router.stack.StackNavigation
+import com.arkivanov.decompose.router.stack.childStack
+import com.arkivanov.decompose.router.stack.pop
+import com.arkivanov.decompose.router.stack.pushNew
+import com.arkivanov.decompose.value.Value
 import com.nikkiw.videofeedlab.feature.videofeed.api.FeedLaunchParams
 import com.nikkiw.videofeedlab.feature.videofeed.api.FeedPresentationId
 import com.nikkiw.videofeedlab.feature.videofeed.api.VideoFeedEntry
@@ -16,62 +20,108 @@ import com.nikkiw.videofeedlab.feature.videofeed.api.VideoFeedEntryFactory
 /**
  * Desktop application root.
  *
- * PR1 deliberately keeps the existing [VideoFeedEntry] unchanged. The root owns only
- * top-level navigation between the presentation picker and the selected feed. A later PR
- * can replace this state holder with a Decompose ChildStack without changing Home contracts.
+ * Each feed destination is created with its own Decompose child context.
+ * Popping the destination destroys the associated feed lifecycle and retained Store.
  */
 internal class DesktopAppRoot(
-    private val componentContext: ComponentContext,
+    componentContext: ComponentContext,
     private val videoFeedEntryFactory: VideoFeedEntryFactory,
-) {
-    private var destination by mutableStateOf<Destination>(Destination.Home)
-    private var activeFeedEntry by mutableStateOf<VideoFeedEntry?>(null)
+) : ComponentContext by componentContext {
+    private val navigation = StackNavigation<Config>()
+
+    internal val childStack: Value<ChildStack<*, Child>> =
+        childStack(
+            source = navigation,
+            serializer = null,
+            initialConfiguration = Config.Home,
+            handleBackButton = true,
+            childFactory = ::createChild,
+        )
 
     @Composable
     fun Content() {
-        when (destination) {
-            Destination.Home ->
-                FeedPresentationHomeScreen(
-                    presentations = DesktopFeedPresentations.all,
-                    onPresentationSelected = ::openPresentation,
-                )
+        Children(stack = childStack) { child ->
+            when (val instance = child.instance) {
+                Child.Home ->
+                    FeedPresentationHomeScreen(
+                        presentations = DesktopFeedPresentations.all,
+                        onPresentationSelected = ::openPresentation,
+                    )
 
-            is Destination.Feed ->
-                FeedDestination(
-                    onBack = ::showHome,
-                )
+                is Child.Feed ->
+                    FeedDestination(
+                        entry = instance.entry,
+                    )
+            }
         }
     }
 
-    private fun openPresentation(presentationId: FeedPresentationId) {
+    internal fun openPresentation(
+        presentationId: FeedPresentationId,
+        startIndex: Int = 0,
+    ) {
         val presentation = DesktopFeedPresentations.find(presentationId) ?: return
         if (!presentation.isAvailable) return
 
-        activeFeedEntry =
-            videoFeedEntryFactory.create(
-                componentContext = componentContext,
-                launchParams = FeedLaunchParams(presentationId = presentationId),
-            )
-        destination = Destination.Feed(presentationId)
+        navigation.pushNew(
+            Config.Feed(
+                presentationId = presentationId,
+                startIndex = startIndex.coerceAtLeast(0),
+            ),
+        )
     }
 
-    private fun showHome() {
-        activeFeedEntry = null
-        destination = Destination.Home
+    internal fun showHome() {
+        navigation.pop()
     }
+
+    private fun createChild(
+        config: Config,
+        componentContext: ComponentContext,
+    ): Child =
+        when (config) {
+            Config.Home -> Child.Home
+
+            is Config.Feed -> {
+                val launchParams =
+                    FeedLaunchParams(
+                        presentationId = config.presentationId,
+                        startIndex = config.startIndex,
+                    )
+
+                Child.Feed(
+                    entry =
+                        videoFeedEntryFactory.create(
+                            componentContext = componentContext,
+                            launchParams = launchParams,
+                        ),
+                    launchParams = launchParams,
+                )
+            }
+        }
 
     @Composable
-    private fun FeedDestination(onBack: () -> Unit) {
+    private fun FeedDestination(entry: VideoFeedEntry) {
         Box(modifier = Modifier.fillMaxSize()) {
-            checkNotNull(activeFeedEntry).Content(onBack = onBack)
+            entry.Content(onBack = ::showHome)
         }
     }
 
-    private sealed interface Destination {
-        data object Home : Destination
+    internal sealed interface Child {
+        data object Home : Child
+
+        data class Feed(
+            val entry: VideoFeedEntry,
+            val launchParams: FeedLaunchParams,
+        ) : Child
+    }
+
+    private sealed interface Config {
+        data object Home : Config
 
         data class Feed(
             val presentationId: FeedPresentationId,
-        ) : Destination
+            val startIndex: Int,
+        ) : Config
     }
 }
