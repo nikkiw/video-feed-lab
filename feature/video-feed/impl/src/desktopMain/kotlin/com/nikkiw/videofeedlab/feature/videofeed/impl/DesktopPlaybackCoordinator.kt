@@ -73,7 +73,8 @@ internal class DesktopPlaybackCoordinator private constructor(
         activeSlot = target
         mutableState.update { it.copy(activeIndex = index) }
 
-        val wasPrepared = target.assignment?.index == index && target.phase != DesktopSlotPhase.FAILED
+        val wasPrepared =
+            target.assignment?.index == index && target.phase != DesktopSlotPhase.FAILED
         if (!wasPrepared) {
             assign(target, index, startPaused = false)
         } else {
@@ -400,11 +401,15 @@ internal class DesktopPlaybackCoordinator private constructor(
     }
 
     internal companion object {
-        fun create(items: List<VideoItem>): Result<DesktopPlaybackCoordinator> {
+        fun create(
+            items: List<VideoItem>,
+            config: DesktopPlaybackConfig = DesktopPlaybackConfig(),
+        ): Result<DesktopPlaybackCoordinator> {
             var factory: MediaPlayerFactory? = null
             return runCatching {
                 val createdFactory = MediaPlayerFactory()
                 factory = createdFactory
+                val mediaOptions = config.mediaOptions()
                 val slots =
                     List(PLAYER_COUNT) { id ->
                         val component =
@@ -425,6 +430,7 @@ internal class DesktopPlaybackCoordinator private constructor(
                                 component = component,
                                 player = player,
                                 surface = component,
+                                mediaOptions = mediaOptions,
                             )
                         component.addHierarchyListener { _ ->
                             if (component.isDisplayable) {
@@ -450,14 +456,6 @@ internal class DesktopPlaybackCoordinator private constructor(
         private const val DEFAULT_VIDEO_HEIGHT = 960
         private const val BUFFER_COMPLETE_PERCENT = 100f
         private const val NANOS_PER_MILLISECOND = 1_000_000L
-
-        internal val MEDIA_OPTIONS =
-            arrayOf(
-                ":network-caching=1200",
-                ":live-caching=1200",
-                ":file-caching=300",
-                ":no-video-title-show",
-            )
     }
 }
 
@@ -513,8 +511,10 @@ internal fun preferredAdjacentIndex(
     direction: DesktopScrollDirection,
     lastIndex: Int,
 ): Int? {
-    val preferred = if (direction == DesktopScrollDirection.BACKWARD) centerIndex - 1 else centerIndex + 1
-    val fallback = if (direction == DesktopScrollDirection.BACKWARD) centerIndex + 1 else centerIndex - 1
+    val preferred =
+        if (direction == DesktopScrollDirection.BACKWARD) centerIndex - 1 else centerIndex + 1
+    val fallback =
+        if (direction == DesktopScrollDirection.BACKWARD) centerIndex + 1 else centerIndex - 1
     return listOf(preferred, fallback).firstOrNull { it in 0..lastIndex }
 }
 
@@ -550,6 +550,7 @@ private class DesktopPlayerSlot(
     val component: CallbackMediaPlayerComponent,
     val player: EmbeddedMediaPlayer,
     val surface: Component,
+    private val mediaOptions: Array<String>,
 ) {
     var assignment: DesktopSlotAssignment? = null
     var phase: DesktopSlotPhase = DesktopSlotPhase.EMPTY
@@ -565,14 +566,23 @@ private class DesktopPlayerSlot(
             pendingAction = PendingPlayerAction.None
             when (action) {
                 is PendingPlayerAction.PlayMrl -> {
-                    player.media().play(action.mrl, *DesktopPlaybackCoordinator.MEDIA_OPTIONS)
+                    player.media().play(
+                        action.mrl,
+                        *mediaOptions,
+                    )
                 }
+
                 is PendingPlayerAction.StartPausedMrl -> {
-                    player.media().startPaused(action.mrl, *DesktopPlaybackCoordinator.MEDIA_OPTIONS)
+                    player.media().startPaused(
+                        action.mrl,
+                        *mediaOptions,
+                    )
                 }
+
                 is PendingPlayerAction.Resume -> {
                     player.controls().play()
                 }
+
                 PendingPlayerAction.None -> {}
             }
         } else {
