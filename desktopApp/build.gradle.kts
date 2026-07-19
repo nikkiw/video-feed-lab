@@ -33,4 +33,6 @@ dependencies {
     implementation(libs.koin.core)
     implementation(libs.decompose)
     implementation(libs.decompose.compose)
+
+    testImplementation(kotlin("test"))
 }
